@@ -91,7 +91,7 @@ VALUE rb_eZeroDivError;
 VALUE rb_eFatal;
 VALUE rb_argv0;
 
-void rb_tr_init_global_constants(VALUE (*get_constant)(const char*)) {
+void rb_tr_trampoline_init_global_constants(VALUE (*get_constant)(const char*)) {
   rb_cArray = get_constant("rb_cArray");
   rb_cBasicObject = get_constant("rb_cBasicObject");
   rb_cBinding = get_constant("rb_cBinding");

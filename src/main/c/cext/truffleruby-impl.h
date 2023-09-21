@@ -20,9 +20,21 @@
 
 #define rb_boolean(c) ((c) ? Qtrue : Qfalse)
 
+// Support
+
+extern void* rb_tr_cext;
+#define RUBY_CEXT rb_tr_cext
+
 // Private functions
 
+extern void* (*rb_tr_unwrap)(VALUE obj);
+extern VALUE (*rb_tr_wrap)(void *obj);
+extern VALUE (*rb_tr_longwrap)(long obj);
+extern void* (*rb_tr_id2sym)(ID obj);
+extern ID (*rb_tr_sym2id)(VALUE sym);
+extern void* (*rb_tr_force_native)(VALUE obj);
 extern bool (*rb_tr_is_native_object)(VALUE value);
+extern VALUE (*rb_tr_rb_f_notimplement)(int argc, const VALUE *argv, VALUE obj, VALUE marker);
 
 // Create a native MutableTruffleString from ptr and len without copying.
 // The returned RubyString is only valid as long as ptr is valid (typically only as long as the caller is on the stack),

@@ -87,7 +87,10 @@ RBasic {
      * @note  This is ::VALUE rather than  an enum for alignment purpose.  Back
      *        in the 1990s there were no such thing like `_Alignas` in C.
      */
+#ifndef TRUFFLERUBY
+    // TruffleRuby: we cannot support writing to these flags, so don't expose the field
     VALUE flags;
+#endif
 
     /**
      * Class of an object.  Every object has its class.  Also, everything is an
@@ -98,11 +101,7 @@ RBasic {
      * Also note the `const` qualifier.  In  ruby an object cannot "change" its
      * class.
      */
-#ifdef TRUFFLERUBY
-    VALUE klass;
-#else
     const VALUE klass;
-#endif
 
 #ifdef __cplusplus
   public:
@@ -117,16 +116,14 @@ RBasic {
      * ourselves.
      */
     RBasic() :
+#ifndef TRUFFLERUBY
         flags(RBIMPL_VALUE_NULL),
+#endif
         klass(RBIMPL_VALUE_NULL)
     {
     }
 #endif
 };
-
-#ifdef TRUFFLERUBY
-POLYGLOT_DECLARE_STRUCT(RBasic)
-#endif
 
 RBIMPL_SYMBOL_EXPORT_BEGIN()
 /**

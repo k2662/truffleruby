@@ -22,44 +22,33 @@ NORETURN(VALUE rb_f_notimplement(int argc, const VALUE *argv, VALUE obj, VALUE m
 
 // Non-standard
 
-NORETURN(void rb_tr_error(const char *message));
 void rb_tr_log_warning(const char *message);
 #define rb_tr_debug(args...) polyglot_invoke(RUBY_CEXT, "rb_tr_debug", args)
 int rb_tr_obj_equal(VALUE first, VALUE second);
 
-// Initialization
-
-void rb_tr_init_global_constants(void);
-
 // These refer Ruby global variables and their value can change,
 // so we use macros instead of C global variables like MRI, which would be complicated to update.
-#define rb_stdin RUBY_CEXT_INVOKE("rb_stdin")
-#define rb_stdout RUBY_CEXT_INVOKE("rb_stdout")
-#define rb_stderr RUBY_CEXT_INVOKE("rb_stderr")
-#define rb_fs RUBY_CEXT_INVOKE("rb_fs")
-#define rb_output_fs RUBY_CEXT_INVOKE("rb_output_fs")
-#define rb_rs RUBY_CEXT_INVOKE("rb_rs")
-#define rb_output_rs RUBY_CEXT_INVOKE("rb_output_rs")
-#define rb_default_rs RUBY_CEXT_INVOKE("rb_default_rs")
+VALUE rb_tr_stdin(void);
+VALUE rb_tr_stdout(void);
+VALUE rb_tr_stderr(void);
+VALUE rb_tr_fs(void);
+VALUE rb_tr_output_fs(void);
+VALUE rb_tr_rs(void);
+VALUE rb_tr_output_rs(void);
+VALUE rb_tr_default_rs(void);
 
-int rb_tr_readable(int mode);
-int rb_tr_writable(int mode);
+#define rb_stdin rb_tr_stdin()
+#define rb_stdout rb_tr_stdout()
+#define rb_stderr rb_tr_stderr()
+#define rb_fs rb_tr_fs()
+#define rb_output_fs rb_tr_output_fs()
+#define rb_rs rb_tr_rs()
+#define rb_output_rs rb_tr_output_rs()
+#define rb_default_rs rb_tr_default_rs()
 
 typedef void* (gvl_call)(void *);
 
 // Utilities
-
-#define rb_warn(FORMAT, ...) __extension__ ({                   \
-if (polyglot_as_boolean(polyglot_invoke(RUBY_CEXT, "warn?"))) { \
-  RUBY_INVOKE(rb_mKernel, "warn", rb_sprintf(FORMAT, ##__VA_ARGS__));   \
-} \
-})
-
-#define rb_warning(FORMAT, ...) __extension__({                    \
-if (polyglot_as_boolean(polyglot_invoke(RUBY_CEXT, "warning?"))) { \
-  RUBY_INVOKE(rb_mKernel, "warn", rb_sprintf(FORMAT, ##__VA_ARGS__)); \
-} \
-})
 
 struct rb_tr_scan_args_parse_data {
   int pre;
@@ -133,10 +122,6 @@ struct rb_tr_scan_args_parse_data {
 #define RUBY_INVOKE_IMPL_NO_WRAP(RECV, NAME, ...) INVOKE_IMPL(RECV, NAME, ##__VA_ARGS__, RUBY_INVOKE_IMPL_18, RUBY_INVOKE_IMPL_17, RUBY_INVOKE_IMPL_16, RUBY_INVOKE_IMPL_15, RUBY_INVOKE_IMPL_14, RUBY_INVOKE_IMPL_13, RUBY_INVOKE_IMPL_12, RUBY_INVOKE_IMPL_11, RUBY_INVOKE_IMPL_10, RUBY_INVOKE_IMPL_9, RUBY_INVOKE_IMPL_8, RUBY_INVOKE_IMPL_7, RUBY_INVOKE_IMPL_6, RUBY_INVOKE_IMPL_5, RUBY_INVOKE_IMPL_4, RUBY_INVOKE_IMPL_3, RUBY_INVOKE_IMPL_2, RUBY_INVOKE_IMPL_1, RUBY_INVOKE_IMPL_0)(RECV, NAME, ##__VA_ARGS__)
 #define RUBY_INVOKE_IMPL(RECV, NAME, ...) rb_tr_wrap(RUBY_INVOKE_IMPL_NO_WRAP(RECV, NAME, ##__VA_ARGS__))
 
-
-#define rb_id2sym(x) rb_tr_wrap(rb_tr_id2sym(x))
-#define rb_sym2id(x) rb_tr_sym2id(x)
-
 // Public macros used in this header and ruby.c
 #define RUBY_INVOKE(RECV, NAME, ...) RUBY_INVOKE_IMPL(rb_tr_unwrap(RECV), NAME, ##__VA_ARGS__)
 #define RUBY_INVOKE_NO_WRAP(RECV, NAME, ...) RUBY_INVOKE_IMPL_NO_WRAP(rb_tr_unwrap(RECV), NAME, ##__VA_ARGS__)
@@ -150,7 +135,7 @@ struct rb_tr_scan_args_parse_data {
 // have macro substitution done on them at the right point in
 // preprocessing and will prevent rb_funcall(..., rb_funcall(...))
 // from being expanded correctly.
-
+/*
 #define RUBY_FUNCALL_IMPL_0(recv, name) polyglot_invoke(recv, name)
 #define RUBY_FUNCALL_IMPL_1(recv, name, V1) polyglot_invoke(recv, name, rb_tr_unwrap(V1))
 #define RUBY_FUNCALL_IMPL_2(recv, name, V1, V2) polyglot_invoke(recv, name, rb_tr_unwrap(V1), rb_tr_id2sym(V2))
@@ -177,6 +162,7 @@ struct rb_tr_scan_args_parse_data {
 
 #define rb_tr_funcall(object, method, n,...) RUBY_CEXT_FUNCALL("rb_funcall", object, ID2SYM(method), INT2FIX(n), ##__VA_ARGS__)
 #define rb_funcall(object, method, ...) rb_tr_funcall(object, method, __VA_ARGS__)
+*/
 
 // Exceptions
 
@@ -186,39 +172,13 @@ struct rb_tr_scan_args_parse_data {
 // Additional non-standard
 VALUE rb_java_class_of(VALUE val);
 VALUE rb_java_to_string(VALUE val);
-VALUE rb_equal_opt(VALUE a, VALUE b);
-int rb_encdb_alias(const char *alias, const char *orig);
 VALUE rb_ivar_lookup(VALUE object, const char *name, VALUE default_value);
-
-// Additional macro to make sure the RSTRING_PTR and the bytes are in native memory, for testing.
-#define NATIVE_RSTRING_PTR(str) ((char*) polyglot_as_i64(RUBY_CEXT_INVOKE_NO_WRAP("NATIVE_RSTRING_PTR", str)))
 
 // Inline implementations
 
-ALWAYS_INLINE(static VALUE rb_tr_string_value(VALUE *value_pointer));
-static inline VALUE rb_tr_string_value(VALUE *value_pointer) {
-  VALUE value = *value_pointer;
-  if (!RB_TYPE_P(value, T_STRING)) {
-    value = rb_str_to_str(value);
-    *value_pointer = value;
-  }
-  return value;
-}
-
-ALWAYS_INLINE(static char *rb_tr_string_value_ptr(VALUE *value_pointer));
-static inline char *rb_tr_string_value_ptr(VALUE *value_pointer) {
-  VALUE string = rb_tr_string_value(value_pointer);
-  return RSTRING_PTR(string);
-}
-
-ALWAYS_INLINE(static char *rb_tr_string_value_cstr(VALUE *value_pointer));
-static inline char *rb_tr_string_value_cstr(VALUE *value_pointer) {
-  VALUE string = rb_tr_string_value(value_pointer);
-  RUBY_CEXT_INVOKE("rb_string_value_cstr_check", string);
-  return RSTRING_PTR(string);
-}
-
 void rb_tr_scan_args_kw_parse(const char *format, struct rb_tr_scan_args_parse_data *parse_data);
+
+bool rb_tr_scan_args_test_kwargs(VALUE kwargs, VALUE raise_error);
 
 ALWAYS_INLINE(static int rb_tr_scan_args_kw_int(int kw_flag, int argc, VALUE *argv, struct rb_tr_scan_args_parse_data parse_data, VALUE *v1, VALUE *v2, VALUE *v3, VALUE *v4, VALUE *v5, VALUE *v6, VALUE *v7, VALUE *v8, VALUE *v9, VALUE *v10));
 static inline int rb_tr_scan_args_kw_int(int kw_flag, int argc, VALUE *argv, struct rb_tr_scan_args_parse_data parse_data, VALUE *v1, VALUE *v2, VALUE *v3, VALUE *v4, VALUE *v5, VALUE *v6, VALUE *v7, VALUE *v8, VALUE *v9, VALUE *v10) {
@@ -290,7 +250,7 @@ static inline int rb_tr_scan_args_kw_int(int kw_flag, int argc, VALUE *argv, str
 
       /* Ruby 3: Remove if branch, as it will not attempt to split hashes */
       if (!NIL_P(hash)) {
-        if (!polyglot_as_boolean(RUBY_CEXT_INVOKE_NO_WRAP("test_kwargs", argv[argc - 1], Qfalse))) {
+        if (!rb_tr_scan_args_test_kwargs(argv[argc - 1], Qfalse)) {
           // Does not handle the case where "The last argument is split into positional and keyword parameters"
           // Instead assumes that it is all one hash
           parse_data.kwargs = false;
@@ -342,7 +302,7 @@ static inline int rb_tr_scan_args_kw_int(int kw_flag, int argc, VALUE *argv, str
     } else if (parse_data.kwargs && !taken_kwargs) {
        if (argn < argc) {
         arg = argv[argn];
-        RUBY_CEXT_INVOKE_NO_WRAP("test_kwargs", arg, Qtrue);
+        rb_tr_scan_args_test_kwargs(arg, Qtrue);
         argn++;
         found_kwargs = true;
       } else {

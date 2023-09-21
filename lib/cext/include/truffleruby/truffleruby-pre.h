@@ -20,6 +20,8 @@ extern "C" {
 
 RUBY_SYMBOL_EXPORT_BEGIN
 
+#include <truffleruby/truffleruby-abi-version.h>
+
 #include <graalvm/llvm/polyglot.h>
 
 #include <ctype.h> // isdigit
@@ -45,34 +47,48 @@ RUBY_SYMBOL_EXPORT_BEGIN
 
 // Support
 
-extern void* rb_tr_cext;
-#define RUBY_CEXT rb_tr_cext
+// extern void* rb_tr_cext;
+// #define RUBY_CEXT rb_tr_cext
 
 #ifndef TRUFFLERUBY_ABI_VERSION
-#error "TRUFFLERUBY_ABI_VERSION must be defined when compiling native extensions. Does the extension override CPPFLAGS or DEFS?"
+#error "TRUFFLERUBY_ABI_VERSION must be defined when compiling native extensions."
 #endif
-void* rb_tr_abi_version(void) __attribute__((weak));
-void* rb_tr_abi_version(void) {
-  const char* abi_version = STRINGIZE(TRUFFLERUBY_ABI_VERSION);
-  return polyglot_from_string(abi_version, "US-ASCII");
+
+const char* rb_tr_abi_version(void) __attribute__((weak));
+const char* rb_tr_abi_version(void) {
+  return TRUFFLERUBY_ABI_VERSION;
 }
 
 // Wrapping and unwrapping of values.
 
 #include "ruby/internal/value.h"
 
+// TODO: remove/comment-out those, at least rb_tr_unwrap() and rb_tr_wrap()
 extern void* (*rb_tr_unwrap)(VALUE obj);
 extern VALUE (*rb_tr_wrap)(void *obj);
-extern VALUE (*rb_tr_longwrap)(long obj);
 extern void* (*rb_tr_id2sym)(ID obj);
-extern ID (*rb_tr_sym2id)(VALUE sym);
-extern void* (*rb_tr_force_native)(VALUE obj);
 
 // Helpers
 
 #ifndef offsetof
 #define offsetof(p_type,field) ((size_t)&(((p_type *)0)->field))
 #endif
+
+// Non-standard. rb_tr_* is all private, the rest is there because the C API does not have a good replacement for it.
+
+NORETURN(void rb_tr_not_implemented(const char *function_name));
+
+unsigned long rb_tr_flags(VALUE object);
+void rb_tr_set_flags(VALUE object, unsigned long flags);
+
+#define RBASIC_FLAGS(object) rb_tr_flags(object)
+#define RBASIC_SET_FLAGS(obj, flags_to_set) rb_tr_set_flags(obj, flags_to_set)
+
+VALUE rb_tr_zlib_crc_table(void);
+VALUE rb_tr_cext_lock_owned_p(void);
+VALUE rb_tr_invoke(VALUE recv, const char* meth);
+
+void rb_exc_set_message(VALUE exc, VALUE message);
 
 // Defines
 
