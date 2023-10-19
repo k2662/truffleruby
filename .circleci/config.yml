@@ -12,14 +12,14 @@ jobs:
     steps:
       - checkout
       - run: 
-          name: env for homebrew
-          command: echo 'export HOMEBREW_CASK_OPTS=/usr/local"' >> "$BASH_ENV"
+          name: setup env
+          command: |
+           echo 'export HOMEBREW_CASK_OPTS=/usr/local"' >> "$BASH_ENV"
+           echo 'export SYSTEM_RUBY="/usr/bin/ruby" >> "$BASH_ENV"
+           echo 'export OPENSSL_DIR="/usr/local"' >> "$BASH_ENV"
       - run:
           name: install dependencies
           command: "brew install cmake ninja dmd zstd java openssl"
-      - run:
-          name: setup env
-          command: echo 'export SYSTEM_RUBY="/usr/bin/ruby" OPENSSL_DIR="/usr/local"' >> "$BASH_ENV"
       - run:
           name: setup env
           command: echo 'alias jt="$HOME/truffleruby/bin/jt"' >> "$BASH_ENV"
