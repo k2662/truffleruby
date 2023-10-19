@@ -28,7 +28,10 @@ jobs:
           command: "brew install cmake ninja dmd zstd java openssl"
       - run:
           name: setup env
-          command: echo 'alias jt="$HOME/truffleruby/bin/jt"' >> "$BASH_ENV"
+          command: echo 'export PATH="$HOME/truffleruby/bin/jt:$PATH"' >> "$BASH_ENV"
+      - run:
+          name: tell yes
+          command: echo 'export JT_IMPORTS_DONT_ASK=0
       - run:
           name: build truffleruby
           command: bin/jt build --env native
