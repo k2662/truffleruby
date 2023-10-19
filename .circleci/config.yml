@@ -31,7 +31,7 @@ jobs:
           command: echo 'export PATH="$HOME/truffleruby/bin/jt:$PATH"' >> "$BASH_ENV"
       - run:
           name: tell yes
-          command: echo 'export JT_IMPORTS_DONT_ASK=0
+          command: echo 'export JT_IMPORTS_DONT_ASK=0' >> "$BASH_ENV"
       - run:
           name: build truffleruby
           command: bin/jt build --env native
