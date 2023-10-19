@@ -1,0 +1,39 @@
+# Use the latest 2.1 version of CircleCI pipeline process engine.
+# See: https://circleci.com/docs/configuration-reference
+version: 2.1
+
+# Define a job to be invoked later in a workflow.
+# See: https://circleci.com/docs/configuration-reference/#jobs
+jobs:
+  build_truffleruby:
+    macos:
+        xcode: "14.2.0"
+
+    steps:
+      - run:
+          name: make dirs
+          command: mkdir truffleruby-ws && cd truffleruby-ws
+      - checkout
+      - run: 
+          name: env for homebrew
+          command: echo 'export HOMEBREW_CASK_OPTS=/usr/local"' >> "$BASH_ENV"
+      - run:
+          name: install dependencies
+          command: "brew install cmake ninja dmd zstd java openssl"
+      - run:
+          name: setup env
+          command: echo 'export SYSTEM_RUBY="/usr/bin/ruby" OPENSSL_DIR="/usr/local"' >> "$BASH_ENV"
+      - run:
+          name: setup env
+          command: echo 'alias jt="$HOME/truffleruby-ws/truffleruby/bin/jt"' >> "$BASH_ENV"
+      - run:
+          name: build truffleruby
+          command: jt build --env native
+
+
+# Orchestrate jobs using workflows
+# See: https://circleci.com/docs/configuration-reference/#workflows
+workflows:
+  truffleruby_workflow:
+    jobs:
+      - build_truffleruby
