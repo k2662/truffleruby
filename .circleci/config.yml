@@ -10,9 +10,6 @@ jobs:
         xcode: "14.2.0"
 
     steps:
-      - run:
-          name: make dirs
-          command: mkdir truffleruby-ws && cd truffleruby-ws
       - checkout
       - run: 
           name: env for homebrew
@@ -25,7 +22,7 @@ jobs:
           command: echo 'export SYSTEM_RUBY="/usr/bin/ruby" OPENSSL_DIR="/usr/local"' >> "$BASH_ENV"
       - run:
           name: setup env
-          command: echo 'alias jt="$HOME/truffleruby-ws/truffleruby/bin/jt"' >> "$BASH_ENV"
+          command: echo 'alias jt="$HOME/truffleruby/bin/jt"' >> "$BASH_ENV"
       - run:
           name: build truffleruby
           command: jt build --env native
