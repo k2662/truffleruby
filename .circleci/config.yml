@@ -13,7 +13,7 @@ jobs:
       - checkout
       - run: 
           name: setup env
-          command: echo 'export HOMEBREW_CASK_OPTS=/usr/local"' >> "$BASH_ENV"
+          command: echo 'export HOMEBREW_CASK_OPTS="/usr/local"' >> "$BASH_ENV"
       - run: 
           name: setup env
           command: echo 'export SYSTEM_RUBY="/usr/bin/ruby"' >> "$BASH_ENV"
