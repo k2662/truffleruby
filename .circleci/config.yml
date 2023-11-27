@@ -13,10 +13,10 @@ jobs:
       - checkout
       - run:
           name: Turn off brew analytics
-          command: echo 'export HOMEBREW_NO_ANALYTICS=1' "$BASH_ENV"
+          command: echo 'export HOMEBREW_NO_ANALYTICS=1' >> "$BASH_ENV"
       - run:
           name: Turn off brew auto-update
-          command: echo 'export HOMEBREW_NO_AUTO_UPDATE=1' "$BASH_ENV"
+          command: echo 'export HOMEBREW_NO_AUTO_UPDATE=1' >> "$BASH_ENV"
       - run: 
           name: setup env
           command: echo 'export HOMEBREW_CASK_OPTS="/usr/local"' >> "$BASH_ENV"
@@ -28,7 +28,7 @@ jobs:
           command: echo 'export OPENSSL_DIR="/usr/local/opt/openssl@3"' >> "$BASH_ENV"
       - run:
           name: install dependencies
-          command: "brew install cmake ninja dmd zstd java openssl libyaml"
+          command: "brew install gnu-tar cmake ninja dmd zstd java openssl libyaml"
       - run:
           name: setup env
           command: echo 'export PATH="$HOME/truffleruby/bin/jt:$PATH"' >> "$BASH_ENV"
@@ -40,13 +40,11 @@ jobs:
           command: bin/jt build --env native
       - run:
           name: compress
-          command: tar -cf truffleruby.tar truffleruby
-      - run:
-          name: compress zstd
-          command: zstd truffleruby.tar
+          command: gtar --zstd -cf truffleruby.tar.zst /Users/distiller/truffleruby/
       - store_artifacts:
+          name: upload build artifacts
           path: truffleruby.tar.zst
-          destination: truffleruby
+          destination: truffleruby.tar.zst
 
 
 # Orchestrate jobs using workflows
