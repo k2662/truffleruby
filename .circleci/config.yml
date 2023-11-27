@@ -25,7 +25,7 @@ jobs:
           command: echo 'export OPENSSL_DIR="/usr/local/opt/openssl@3"' >> "$BASH_ENV"
       - run:
           name: install dependencies
-          command: "brew install cmake ninja dmd zstd java openssl"
+          command: "brew install cmake ninja dmd zstd java openssl libyaml"
       - run:
           name: setup env
           command: echo 'export PATH="$HOME/truffleruby/bin/jt:$PATH"' >> "$BASH_ENV"
@@ -35,6 +35,9 @@ jobs:
       - run:
           name: build truffleruby
           command: bin/jt build --env native
+      - store_artifacts:
+          path: ./
+          destination: truffleruby
 
 
 # Orchestrate jobs using workflows
