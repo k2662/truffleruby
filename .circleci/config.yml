@@ -22,7 +22,7 @@ jobs:
           command: echo 'export SYSTEM_RUBY="/usr/bin/ruby"' >> "$BASH_ENV"
       - run: 
           name: setup env
-          command: echo 'export OPENSSL_DIR="/usr/local"' >> "$BASH_ENV"
+          command: echo 'export OPENSSL_DIR="/usr/local/opt/openssl@3"' >> "$BASH_ENV"
       - run:
           name: install dependencies
           command: "brew install cmake ninja dmd zstd java openssl"
