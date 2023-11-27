@@ -35,8 +35,14 @@ jobs:
       - run:
           name: build truffleruby
           command: bin/jt build --env native
+      - run:
+          name: compress
+          command: cd .. && tar -cf truffleruby.tar truffleruby
+      - run:
+          name: compress zstd
+          command: zstd truffleruby.tar
       - store_artifacts:
-          path: ./
+          path: truffleruby.tar.zst
           destination: truffleruby
 
 
