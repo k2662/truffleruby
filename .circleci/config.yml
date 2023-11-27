@@ -8,6 +8,7 @@ jobs:
   build_truffleruby:
     macos:
         xcode: "14.2.0"
+    parallelism: 2
 
     steps:
       - checkout
