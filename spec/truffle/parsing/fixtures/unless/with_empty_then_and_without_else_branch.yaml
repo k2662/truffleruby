@@ -20,7 +20,7 @@ ast: |
               WriteLocalVariableNode
                   attributes:
                       flags = 0
-                      frameSlot = 0
+                      frameSlot = 0 # (self)
                   children:
                       valueNode =
                           ProfileArgumentNodeGen
@@ -38,5 +38,4 @@ ast: |
               NilLiteralNode
                   attributes:
                       flags = 0
-                      isImplicit = true
           ]

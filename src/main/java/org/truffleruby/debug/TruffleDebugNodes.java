@@ -73,7 +73,7 @@ import org.truffleruby.language.Nil;
 import org.truffleruby.language.RubyDynamicObject;
 import org.truffleruby.language.RubyGuards;
 import org.truffleruby.language.RubyRootNode;
-import org.truffleruby.language.arguments.EmptyArgumentsDescriptor;
+import org.truffleruby.language.arguments.NoKeywordArgumentsDescriptor;
 import org.truffleruby.language.arguments.RubyArguments;
 import org.truffleruby.language.backtrace.BacktraceFormatter;
 import org.truffleruby.language.backtrace.InternalRootNode;
@@ -256,7 +256,7 @@ public abstract class TruffleDebugNodes {
 
     private static byte[] yarpSerialize(RubyLanguage language, byte[] source) {
         // TODO: load it once during context initialization (when YARP is used as the main parser)
-        Parser.loadLibrary(language.getRubyHome() + "/lib/libyarp" + Platform.LIB_SUFFIX);
+        Parser.loadLibrary(language.getRubyHome() + "/lib/libyarpbindings" + Platform.LIB_SUFFIX);
         return Parser.parseAndSerialize(source);
     }
 
@@ -278,7 +278,7 @@ public abstract class TruffleDebugNodes {
         }
     }
 
-    @CoreMethod(names = "yarp_parse", onSingleton = true, required = 1)
+    @CoreMethod(names = { "yarp_parse" }, onSingleton = true, required = 1)
     public abstract static class YARPParseNode extends CoreMethodArrayArgumentsNode {
         @TruffleBoundary
         @Specialization(guards = "strings.isRubyString(code)", limit = "1")
@@ -332,7 +332,7 @@ public abstract class TruffleDebugNodes {
                     null,
                     coreLibrary().mainObject,
                     Nil.INSTANCE,
-                    EmptyArgumentsDescriptor.INSTANCE,
+                    NoKeywordArgumentsDescriptor.INSTANCE,
                     EMPTY_ARGUMENTS));
         }
     }
@@ -365,7 +365,7 @@ public abstract class TruffleDebugNodes {
         @Specialization
         Object ast(Object executable,
                 @Cached ToCallTargetNode toCallTargetNode) {
-            final RootCallTarget callTarget = toCallTargetNode.execute(executable);
+            final RootCallTarget callTarget = toCallTargetNode.execute(this, executable);
             return ast(callTarget.getRootNode());
         }
 
@@ -392,7 +392,7 @@ public abstract class TruffleDebugNodes {
         @Specialization
         Object printAST(Object executable,
                 @Cached ToCallTargetNode toCallTargetNode) {
-            final RootCallTarget callTarget = toCallTargetNode.execute(executable);
+            final RootCallTarget callTarget = toCallTargetNode.execute(this, executable);
             NodeUtil.printCompactTree(getContext().getEnvErrStream(), callTarget.getRootNode());
             return nil;
         }
@@ -404,7 +404,7 @@ public abstract class TruffleDebugNodes {
         @Specialization
         Object printSourceSections(Object executable,
                 @Cached ToCallTargetNode toCallTargetNode) {
-            final RootCallTarget callTarget = toCallTargetNode.execute(executable);
+            final RootCallTarget callTarget = toCallTargetNode.execute(this, executable);
             NodeUtil.printSourceAttributionTree(getContext().getEnvErrStream(), callTarget.getRootNode());
             return nil;
         }
@@ -416,7 +416,7 @@ public abstract class TruffleDebugNodes {
         @Specialization
         int astSize(Object executable,
                 @Cached ToCallTargetNode toCallTargetNode) {
-            final RootCallTarget callTarget = toCallTargetNode.execute(executable);
+            final RootCallTarget callTarget = toCallTargetNode.execute(this, executable);
             return NodeUtil.countNodes(callTarget.getRootNode());
         }
     }

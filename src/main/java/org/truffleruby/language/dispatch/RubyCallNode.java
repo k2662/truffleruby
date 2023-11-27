@@ -27,7 +27,7 @@ import org.truffleruby.language.RubyBaseNode;
 import org.truffleruby.language.RubyGuards;
 import org.truffleruby.language.RubyNode;
 import org.truffleruby.language.arguments.ArgumentsDescriptor;
-import org.truffleruby.language.arguments.EmptyArgumentsDescriptor;
+import org.truffleruby.language.arguments.NoKeywordArgumentsDescriptor;
 import org.truffleruby.language.arguments.KeywordArgumentsDescriptor;
 import org.truffleruby.language.arguments.RubyArguments;
 import org.truffleruby.language.arguments.SplatToArgsNode;
@@ -143,7 +143,7 @@ public final class RubyCallNode extends LiteralCallNode implements AssignableNod
     // - exception in rescue (rescue => a.b)
     @Override
     public void assign(VirtualFrame frame, Object value) {
-        assert ((getLastArgumentNode() instanceof NilLiteralNode nilNode && nilNode.isImplicit()) ||
+        assert ((getLastArgumentNode() instanceof NilLiteralNode) ||
                 getLastArgumentNode() instanceof DeadNode) : getLastArgumentNode();
 
         final Object receiverObject = receiver.execute(frame);
@@ -171,7 +171,7 @@ public final class RubyCallNode extends LiteralCallNode implements AssignableNod
         // Remove empty kwargs in the caller, so the callee does not need to care about this special case
         if (descriptor instanceof KeywordArgumentsDescriptor && emptyKeywordArguments(rubyArgs)) {
             rubyArgs = removeEmptyKeywordArguments(rubyArgs);
-            descriptor = EmptyArgumentsDescriptor.INSTANCE;
+            descriptor = NoKeywordArgumentsDescriptor.INSTANCE;
         }
         RubyArguments.setDescriptor(rubyArgs, descriptor);
 

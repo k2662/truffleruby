@@ -1,3 +1,8 @@
+/**
+ * @file diagnostic.h
+ *
+ * A list of diagnostics generated during parsing.
+ */
 #ifndef PRISM_DIAGNOSTIC_H
 #define PRISM_DIAGNOSTIC_H
 
@@ -8,14 +13,29 @@
 #include <stdlib.h>
 #include <assert.h>
 
-// This struct represents a diagnostic found during parsing.
+/**
+ * This struct represents a diagnostic generated during parsing.
+ *
+ * @extends pm_list_node_t
+ */
 typedef struct {
+    /** The embedded base node. */
     pm_list_node_t node;
+
+    /** A pointer to the start of the source that generated the diagnostic. */
     const uint8_t *start;
+
+    /** A pointer to the end of the source that generated the diagnostic. */
     const uint8_t *end;
+
+    /** The message associated with the diagnostic. */
     const char *message;
 } pm_diagnostic_t;
 
+/**
+ * The diagnostic IDs of all of the diagnostics, used to communicate the types
+ * of errors between the parser and the user.
+ */
 typedef enum {
     PM_ERR_ALIAS_ARGUMENT,
     PM_ERR_AMPAMPEQ_MULTI_ASSIGN,
@@ -158,6 +178,7 @@ typedef enum {
     PM_ERR_NUMBERED_PARAMETER_NOT_ALLOWED,
     PM_ERR_NUMBERED_PARAMETER_OUTER_SCOPE,
     PM_ERR_OPERATOR_MULTI_ASSIGN,
+    PM_ERR_OPERATOR_WRITE_ARGUMENTS,
     PM_ERR_OPERATOR_WRITE_BLOCK,
     PM_ERR_PARAMETER_ASSOC_SPLAT_MULTI,
     PM_ERR_PARAMETER_BLOCK_MULTI,
@@ -210,6 +231,7 @@ typedef enum {
     PM_ERR_UNARY_RECEIVER_TILDE,
     PM_ERR_UNDEF_ARGUMENT,
     PM_ERR_UNTIL_TERM,
+    PM_ERR_VOID_EXPRESSION,
     PM_ERR_WHILE_TERM,
     PM_ERR_WRITE_TARGET_READONLY,
     PM_ERR_WRITE_TARGET_UNEXPECTED,
@@ -218,14 +240,27 @@ typedef enum {
     PM_WARN_AMBIGUOUS_FIRST_ARGUMENT_PLUS,
     PM_WARN_AMBIGUOUS_PREFIX_STAR,
     PM_WARN_AMBIGUOUS_SLASH,
+
     /* This must be the last member. */
     PM_DIAGNOSTIC_ID_LEN,
 } pm_diagnostic_id_t;
 
-// Append a diagnostic to the given list of diagnostics.
+/**
+ * Append a diagnostic to the given list of diagnostics.
+ *
+ * @param list The list to append to.
+ * @param start The start of the diagnostic.
+ * @param end The end of the diagnostic.
+ * @param diag_id The diagnostic ID.
+ * @return Whether the diagnostic was successfully appended.
+ */
 bool pm_diagnostic_list_append(pm_list_t *list, const uint8_t *start, const uint8_t *end, pm_diagnostic_id_t diag_id);
 
-// Deallocate the internal state of the given diagnostic list.
+/**
+ * Deallocate the internal state of the given diagnostic list.
+ *
+ * @param list The list to deallocate.
+ */
 void pm_diagnostic_list_free(pm_list_t *list);
 
 #endif

@@ -27,7 +27,7 @@ import org.truffleruby.interop.ToJavaStringNode;
 import org.truffleruby.language.RubyLambdaRootNode;
 import org.truffleruby.language.RubyNode;
 import org.truffleruby.language.RubyRootNode;
-import org.truffleruby.language.arguments.EmptyArgumentsDescriptor;
+import org.truffleruby.language.arguments.NoKeywordArgumentsDescriptor;
 import org.truffleruby.language.library.RubyStringLibrary;
 import org.truffleruby.annotations.Split;
 import org.truffleruby.language.threadlocal.SpecialVariableStorage;
@@ -57,7 +57,7 @@ public abstract class TruffleGraalNodes {
         @Specialization
         Object alwaysSplit(Object executable,
                 @Cached ToCallTargetNode toCallTargetNode) {
-            final RootCallTarget callTarget = toCallTargetNode.execute(executable);
+            final RootCallTarget callTarget = toCallTargetNode.execute(this, executable);
             if (getContext().getOptions().ALWAYS_SPLIT_HONOR) {
                 RubyRootNode.of(callTarget).setSplit(Split.ALWAYS);
             }
@@ -71,7 +71,7 @@ public abstract class TruffleGraalNodes {
         @Specialization
         Object neverSplit(Object executable,
                 @Cached ToCallTargetNode toCallTargetNode) {
-            final RootCallTarget callTarget = toCallTargetNode.execute(executable);
+            final RootCallTarget callTarget = toCallTargetNode.execute(this, executable);
             if (getContext().getOptions().NEVER_SPLIT_HONOR) {
                 RubyRootNode.of(callTarget).setSplit(Split.NEVER);
             }
@@ -118,7 +118,7 @@ public abstract class TruffleGraalNodes {
                             null,
                             nil,
                             nil,
-                            EmptyArgumentsDescriptor.INSTANCE,
+                            NoKeywordArgumentsDescriptor.INSTANCE,
                             EMPTY_ARGUMENTS);
 
             // The Proc no longer needs the original declaration frame. However, all procs must have a

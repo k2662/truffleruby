@@ -14,6 +14,7 @@ package org.truffleruby.core.encoding;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.GenerateCached;
 import com.oracle.truffle.api.dsl.GenerateInline;
+import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Idempotent;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.nodes.Node;
@@ -36,6 +37,7 @@ import org.truffleruby.core.proc.RubyProc;
 import org.truffleruby.core.string.RubyString;
 import org.truffleruby.core.string.StringGuards;
 import org.truffleruby.core.string.ImmutableRubyString;
+import org.truffleruby.core.symbol.RubySymbol;
 import org.truffleruby.interop.ToJavaStringNode;
 import org.truffleruby.language.Nil;
 import org.truffleruby.language.RubyBaseNode;
@@ -68,6 +70,7 @@ public abstract class EncodingNodes {
     @ImportStatic(TruffleString.CodeRange.class)
     @GenerateCached(false)
     @GenerateInline
+    @GenerateUncached
     public abstract static class NegotiateCompatibleStringEncodingNode extends RubyBaseNode {
 
         public abstract RubyEncoding execute(Node node, AbstractTruffleString first, RubyEncoding firstEncoding,
@@ -508,6 +511,16 @@ public abstract class EncodingNodes {
         }
     }
 
+    @Primitive(name = "encoding_define_alias")
+    public abstract static class DefineAliasNode extends PrimitiveArrayArgumentsNode {
+        @TruffleBoundary
+        @Specialization
+        RubyEncoding defineAlias(RubyEncoding encoding, RubySymbol aliasName) {
+            getContext().getEncodingManager().defineAlias(encoding.jcoding, aliasName.getString());
+            return encoding;
+        }
+    }
+
     @Primitive(name = "encoding_is_unicode")
     public abstract static class IsUnicodeNode extends PrimitiveArrayArgumentsNode {
         @Specialization
@@ -520,28 +533,31 @@ public abstract class EncodingNodes {
     public abstract static class GetActualEncodingPrimitiveNode extends PrimitiveArrayArgumentsNode {
 
         @Specialization(guards = "libString.isRubyString(string)", limit = "1")
-        RubyEncoding getActualEncoding(Object string,
+        static RubyEncoding getActualEncoding(Object string,
                 @Cached GetActualEncodingNode getActualEncodingNode,
-                @Cached RubyStringLibrary libString) {
-            return getActualEncodingNode.execute(libString.getTString(string), libString.getEncoding(string));
+                @Cached RubyStringLibrary libString,
+                @Bind("this") Node node) {
+            return getActualEncodingNode.execute(node, libString.getTString(string), libString.getEncoding(string));
         }
 
     }
 
     // MRI: get_actual_encoding
+    @GenerateInline
+    @GenerateCached(false)
     public abstract static class GetActualEncodingNode extends RubyBaseNode {
 
-        public abstract RubyEncoding execute(AbstractTruffleString tstring, RubyEncoding encoding);
+        public abstract RubyEncoding execute(Node node, AbstractTruffleString tstring, RubyEncoding encoding);
 
         @Specialization(guards = "!encoding.isDummy")
-        RubyEncoding getActualEncoding(AbstractTruffleString tstring, RubyEncoding encoding) {
+        static RubyEncoding getActualEncoding(AbstractTruffleString tstring, RubyEncoding encoding) {
             return encoding;
         }
 
         @TruffleBoundary
         @Specialization(guards = "encoding.isDummy")
-        RubyEncoding getActualEncodingDummy(AbstractTruffleString tstring, RubyEncoding encoding,
-                @Cached TruffleString.ReadByteNode readByteNode) {
+        static RubyEncoding getActualEncodingDummy(AbstractTruffleString tstring, RubyEncoding encoding,
+                @Cached(inline = false) TruffleString.ReadByteNode readByteNode) {
             if (encoding.isUnicode) {
                 var enc = encoding.tencoding;
                 var byteLength = tstring.byteLength(enc);
@@ -775,6 +791,7 @@ public abstract class EncodingNodes {
     // MRI: rb_enc_check_str / rb_encoding_check (with RopeWithEncoding arguments)
     @GenerateInline
     @GenerateCached(false)
+    @GenerateUncached
     public abstract static class CheckStringEncodingNode extends RubyBaseNode {
 
         public abstract RubyEncoding executeCheckEncoding(Node node, AbstractTruffleString first,

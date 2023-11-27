@@ -180,12 +180,17 @@ module Utilities
     ee?
   end
 
+  def graal_common_json
+    "#{GRAAL_DIR}/common.json"
+  end
+
   def jvmci_version
     @jvmci_version ||= begin
-      ci = File.read("#{TRUFFLERUBY_DIR}/common.json")
+      sforceimports unless File.directory?(GRAAL_DIR)
+      common_json = File.read(graal_common_json)
       edition = ee_jdk? ? 'ee' : 'ce'
       regex = /"labsjdk-#{edition}-#{@jdk_version}":\s*\{\s*"name":\s*"labsjdk"\s*,\s*"version":\s*"[^"]+-(jvmci-[^"]+)"\s*,/
-      raise "JVMCI version not found for labsjdk-#{edition}-#{@jdk_version} in common.json" unless regex =~ ci
+      raise "JVMCI version not found for labsjdk-#{edition}-#{@jdk_version} in #{graal_common_json}" unless regex =~ common_json
       $1
     end
   end
@@ -592,6 +597,7 @@ module Utilities
         end
       end
       java_home ||= ENV['JAVA_HOME']
+      fix = 'Run `unset JAVA_HOME` and retry to automatically download the correct JDK.'
 
       if java_home
         java_home = File.realpath(java_home)
@@ -603,10 +609,10 @@ module Utilities
         if java_version_output.include?(jvmci_version)
           :use_env_java_home
         elsif java_version_output.include?('jvmci')
-          warn "warning: JAVA_HOME=#{java_home} is not the same JVMCI version as in common.json (#{jvmci_version})"
+          warn "warning: JAVA_HOME=#{java_home} is not the same JVMCI version as in #{graal_common_json} (#{jvmci_version}).\n#{fix}"
           :use_env_java_home
         else
-          raise "$JAVA_HOME does not seem to point to a JVMCI-enabled JDK (`#{java_home}/bin/java -version` does not contain 'jvmci')"
+          raise "$JAVA_HOME does not seem to point to a JVMCI-enabled JDK (`#{java_home}/bin/java -version` does not contain 'jvmci').\n#{fix}"
         end
       else
         raise '$JAVA_HOME should be set in CI' if ci?
@@ -1410,7 +1416,7 @@ module Commands
 
   ALL_CEXTS_TESTS = %w[
     tools postinstallhook
-    minimum method module globals backtraces xopenssl werror stripped
+    minimum module method globals backtraces xopenssl werror stripped
     oily_png psd_native
     puma sqlite3 unf_ext json grpc RubyInline msgpack
   ]
@@ -1437,13 +1443,16 @@ module Commands
         # Test tools
         run_ruby 'test/truffle/cexts/test_preprocess.rb'
 
-      when 'minimum', 'method', 'module', 'globals', 'backtraces', 'xopenssl', 'werror', 'stripped'
+      when 'minimum', 'module', 'method', 'globals', 'backtraces', 'xopenssl', 'werror', 'stripped'
         # Test that we can compile and run some very basic C extensions
+        output_file = 'cext-output.txt'
+        dir = "test/truffle/cexts/#{test_name}"
+        cextc(dir)
+        script = "#{dir}/bin/#{test_name}"
+        # bin/backtraces relies on being run with an absolute path for __FILE__
+        script = "#{TRUFFLERUBY_DIR}/#{script}" if test_name == 'backtraces'
+        run_ruby "-I#{dir}/lib", script, out: output_file
         begin
-          output_file = 'cext-output.txt'
-          dir = "#{TRUFFLERUBY_DIR}/test/truffle/cexts/#{test_name}"
-          cextc(dir)
-          run_ruby "-I#{dir}/lib", "#{dir}/bin/#{test_name}", out: output_file
           actual = File.read(output_file)
           expected_file = "#{dir}/expected.txt"
           expected = File.read(expected_file)
@@ -1682,7 +1691,7 @@ module Commands
       options += %w[--excl-tag slow]
     end
 
-    options += %w[--timeout 300] if ci?
+    options += %w[--timeout 600] if ci?
 
     args, ruby_args = args_split(args)
     vm_args, ruby_args, parsed_options = ruby_options({}, ['--reveal', *ruby_args])
@@ -2260,7 +2269,7 @@ module Commands
       raise "The process did not compile #{method}" unless compiled
 
       unless igv
-        # See org.graalvm.compiler.debug.StandardPathUtilitiesProvider#sanitizeFileName
+        # See StandardPathUtilitiesProvider#sanitizeFileName in graal
         method_glob_pattern = method.gsub(/[ \/\p{Cntrl}]/, '_')
         if truffleruby_native?
           method_glob_pattern = "{Isolated:_,}#{method_glob_pattern}"
@@ -2329,7 +2338,7 @@ module Commands
   ruby2_keywords :cfg2asm if respond_to?(:ruby2_keywords, true)
 
   def igv
-    compiler = File.expand_path '../graal/compiler', TRUFFLERUBY_DIR
+    compiler = "#{GRAAL_DIR}/compiler"
     mx('igv', chdir: compiler)
   end
 
@@ -2358,7 +2367,7 @@ module Commands
         jdk_binaries = File.expand_path '../graal-enterprise/ci/jdk-binaries.json', TRUFFLERUBY_DIR
       end
       mx '-y', 'fetch-jdk',
-         '--configuration', "#{TRUFFLERUBY_DIR}/common.json",
+         '--configuration', graal_common_json,
          *(['--jdk-binaries', jdk_binaries] if jdk_binaries),
          '--java-distribution', jdk_name,
          '--to', JDKS_CACHE_DIR,
@@ -2468,7 +2477,9 @@ module Commands
   end
 
   private def sforceimports?(mx_base_args)
-    scheckimports_output = mx(*mx_base_args, 'scheckimports', '--ignore-uncommitted', '--warn-only', primary_suite: TRUFFLERUBY_DIR, capture: :both)
+    return true unless File.directory?(GRAAL_DIR)
+
+    scheckimports_output = mx(*mx_base_args, 'scheckimports', '--ignore-uncommitted', '--warn-only', java_home: :none, primary_suite: TRUFFLERUBY_DIR, capture: :both)
 
     unless scheckimports_output.empty?
       # Don't ask to update, just warn.
@@ -2500,6 +2511,10 @@ module Commands
         end
       end
     end
+  end
+
+  def sforceimports
+    mx('sforceimports', java_home: :none, primary_suite: TRUFFLERUBY_DIR)
   end
 
   private def build_graalvm(*options)
@@ -2537,14 +2552,14 @@ module Commands
     checkout_enterprise_revision(env) if cloned
 
     if options.delete('--sforceimports') || sforceimports?(mx_base_args)
-      mx('sforceimports', primary_suite: TRUFFLERUBY_DIR)
+      sforceimports
       if ee
         checkout_enterprise_revision(env) if !cloned
         # sforceimports for optional suites imported in vm-enterprise like substratevm-enterprise-gcs
         vm_enterprise = File.expand_path '../graal-enterprise/vm-enterprise', TRUFFLERUBY_DIR
-        mx('--env', env_path(env), 'sforceimports', primary_suite: vm_enterprise)
+        mx('--env', env_path(env), 'sforceimports', java_home: :none, primary_suite: vm_enterprise)
         # And still make sure we import the graal revision as in mx.truffleruby/suite.py
-        mx('sforceimports', primary_suite: TRUFFLERUBY_DIR)
+        sforceimports
       end
     end
 
@@ -3086,7 +3101,7 @@ module Commands
 
     # Lint
     rubocop if changed['.rb']
-    sh 'tool/lint.sh' if changed['.c']
+    sh ruby_running_jt_env, 'tool/c-linter.rb' if changed['.c']
     checkstyle(changed['.java']) if changed['.java']
     command_format(changed['.java']) if changed['.java']
     shellcheck if changed['.sh'] or changed['.inc']
@@ -3115,7 +3130,7 @@ module Commands
     end
   end
 
-  ABI_VERSION_FILE = 'lib/cext/ABI_version.txt'
+  ABI_VERSION_FILE = 'lib/cext/include/truffleruby/truffleruby-abi-version.h'
   ABI_CHECK_FILE = 'lib/cext/ABI_check.txt'
 
   def check_abi(fail: true)
@@ -3132,6 +3147,7 @@ module Commands
       src/main/c/cext/extconf.rb
       src/main/c/cext/*.{c,h}
     ].flat_map { |pattern| Dir[pattern].sort }
+    abi_files.delete ABI_VERSION_FILE
 
     changed_abi_files = changed_files & abi_files
     unless changed_abi_files.empty?

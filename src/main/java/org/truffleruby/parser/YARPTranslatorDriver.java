@@ -117,6 +117,11 @@ public final class YARPTranslatorDriver {
                     "A frame should be given iff the context is not toplevel: " + parserContext + " " + parentFrame);
         }
 
+        if (!rubySource.getEncoding().isAsciiCompatible) {
+            throw new RaiseException(context, context.getCoreExceptions()
+                    .argumentError(rubySource.getEncoding() + " is not ASCII compatible", currentNode));
+        }
+
         final Source source = rubySource.getSource();
 
         final StaticScope staticScope = new StaticScope(StaticScope.Type.LOCAL, null);
@@ -165,12 +170,6 @@ public final class YARPTranslatorDriver {
         if (language.options.FROZEN_STRING_LITERALS) {
             parserConfiguration.setFrozenStringLiteral(true);
         }
-
-        RubyLexer.parseMagicComment(rubySource.getTStringWithEncoding(), (name, value) -> {
-            if (RubyLexer.isMagicTruffleRubyPrimitivesComment(name)) {
-                parserConfiguration.allowTruffleRubyPrimitives = value.equalsIgnoreCase("true");
-            }
-        });
 
         // Parse to the YARP AST
 
@@ -243,7 +242,6 @@ public final class YARPTranslatorDriver {
         byte[] sourceBytes = rubySource.getBytes();
         final YARPTranslator translator = new YARPTranslator(
                 language,
-                null,
                 environment,
                 sourceBytes,
                 source,
@@ -409,7 +407,7 @@ public final class YARPTranslatorDriver {
 
         // YARP begin
         byte[] sourceBytes = rubySource.getBytes();
-        org.prism.Parser.loadLibrary(language.getRubyHome() + "/lib/libyarp" + Platform.LIB_SUFFIX);
+        org.prism.Parser.loadLibrary(language.getRubyHome() + "/lib/libyarpbindings" + Platform.LIB_SUFFIX);
         byte[] serializedBytes = Parser.parseAndSerialize(sourceBytes);
 
         var yarpSource = createYARPSource(sourceBytes, rubySource);
@@ -454,6 +452,17 @@ public final class YARPTranslatorDriver {
                                 rubySource.getSource().createSection(lineNumber)));
             } else {
                 throw new UnsupportedOperationException(message);
+            }
+        }
+
+        for (var magicComment : parseResult.magicComments) {
+            String name = rubySource.getTStringWithEncoding()
+                    .substring(magicComment.keyLocation.startOffset, magicComment.keyLocation.length).toJavaString();
+            String value = rubySource.getTStringWithEncoding()
+                    .substring(magicComment.valueLocation.startOffset, magicComment.valueLocation.length)
+                    .toJavaString();
+            if (RubyLexer.isMagicTruffleRubyPrimitivesComment(name)) {
+                configuration.allowTruffleRubyPrimitives = value.equalsIgnoreCase("true");
             }
         }
 
@@ -504,9 +513,11 @@ public final class YARPTranslatorDriver {
     public static RubySource createRubySource(Object code) {
         var tstringWithEnc = new TStringWithEncoding(RubyGuards.asTruffleStringUncached(code),
                 RubyStringLibrary.getUncached().getEncoding(code));
-        var charSequence = new ByteBasedCharSequence(tstringWithEnc);
+        var sourceTString = RubyLexer.createSourceTStringBasedOnMagicEncodingComment(tstringWithEnc,
+                tstringWithEnc.encoding);
+        var charSequence = new ByteBasedCharSequence(sourceTString);
         Source source = Source.newBuilder("ruby", charSequence, "<parse_ast>").build();
-        return new RubySource(source, source.getName(), tstringWithEnc);
+        return new RubySource(source, source.getName(), sourceTString);
     }
 
     public static Nodes.Source createYARPSource(byte[] sourceBytes, RubySource rubySource) {
@@ -516,7 +527,7 @@ public final class YARPTranslatorDriver {
             lineOffsets[line - 1] = source.getLineStartOffset(line);
         }
 
-        return new Nodes.Source(sourceBytes, lineOffsets);
+        return new Nodes.Source(sourceBytes, 1, lineOffsets);
     }
 
     private TranslatorEnvironment environmentForFrame(RubyContext context, MaterializedFrame frame, int blockDepth) {

@@ -33,6 +33,7 @@ import com.oracle.truffle.api.strings.TruffleString.ErrorHandling;
 import com.oracle.truffle.api.strings.TruffleStringIterator;
 import org.truffleruby.Layouts;
 import org.truffleruby.core.encoding.EncodingNodes;
+import org.truffleruby.core.encoding.EncodingNodesFactory;
 import org.truffleruby.core.encoding.RubyEncoding;
 import org.truffleruby.language.Nil;
 import org.truffleruby.language.RubyBaseNode;
@@ -235,6 +236,9 @@ public abstract class StringHelperNodes {
 
     public abstract static class TrTableNode extends RubyBaseNode {
 
+        static final EncodingNodes.CheckStringEncodingNode UNCACHED_CHECK_ENCODING_NODE = EncodingNodesFactory.CheckStringEncodingNodeGen
+                .getUncached();
+
         protected boolean[] squeeze() {
             return new boolean[StringSupport.TRANS_SIZE + 1];
         }
@@ -315,11 +319,10 @@ public abstract class StringHelperNodes {
         static Object deleteBangFast(Node node, RubyString string, TStringWithEncoding[] args,
                 @Cached(value = "args", dimensions = 1) TStringWithEncoding[] cachedArgs,
                 @Cached(inline = false) TruffleString.EqualNode equalNode,
-                @Cached @Shared EncodingNodes.CheckStringEncodingNode checkEncodingNode,
                 @Cached @Shared RubyStringLibrary libString,
                 @Cached("libString.getEncoding(string)") RubyEncoding cachedEncoding,
                 @Cached(value = "squeeze()", dimensions = 1) boolean[] squeeze,
-                @Cached("findEncoding(node, libString.getTString(string), libString.getEncoding(string), cachedArgs, checkEncodingNode)") RubyEncoding compatEncoding,
+                @Cached("findEncoding(node, libString.getTString(string), libString.getEncoding(string), cachedArgs, UNCACHED_CHECK_ENCODING_NODE)") RubyEncoding compatEncoding,
                 @Cached("makeTables(node, cachedArgs, squeeze, compatEncoding)") StringSupport.TrTables tables,
                 @Cached @Exclusive InlinedBranchProfile nullProfile) {
             var processedTString = processStr(node, string, squeeze, compatEncoding, tables);
@@ -335,7 +338,7 @@ public abstract class StringHelperNodes {
         @Specialization(guards = "!string.tstring.isEmpty()", replaces = "deleteBangFast")
         static Object deleteBangSlow(Node node, RubyString string, TStringWithEncoding[] args,
                 @Cached @Shared RubyStringLibrary libString,
-                @Cached @Shared EncodingNodes.CheckStringEncodingNode checkEncodingNode,
+                @Cached EncodingNodes.CheckStringEncodingNode checkEncodingNode,
                 @Cached @Exclusive InlinedBranchProfile errorProfile) {
             if (args.length == 0) {
                 errorProfile.enter(node);
@@ -443,19 +446,16 @@ public abstract class StringHelperNodes {
 
     }
 
+    @GenerateInline
+    @GenerateCached(false)
     public abstract static class NormalizeIndexNode extends RubyBaseNode {
 
-        @NeverDefault
-        public static NormalizeIndexNode create() {
-            return StringHelperNodesFactory.NormalizeIndexNodeGen.create();
-        }
-
-        public abstract int executeNormalize(int index, int length);
+        public abstract int executeNormalize(Node node, int index, int length);
 
         @Specialization
-        int normalizeIndex(int index, int length,
+        static int normalizeIndex(Node node, int index, int length,
                 @Cached InlinedConditionProfile negativeIndexProfile) {
-            if (negativeIndexProfile.profile(this, index < 0)) {
+            if (negativeIndexProfile.profile(node, index < 0)) {
                 return index + length;
             }
 
@@ -572,42 +572,41 @@ public abstract class StringHelperNodes {
     }
 
     @ImportStatic(StringGuards.class)
+    @GenerateCached(false)
+    @GenerateInline
     public abstract static class GetCodePointNode extends RubyBaseNode {
 
-        public abstract int executeGetCodePoint(AbstractTruffleString string, RubyEncoding encoding, int byteIndex);
+        public abstract int executeGetCodePoint(Node node, AbstractTruffleString string, RubyEncoding encoding,
+                int byteIndex);
 
         @Specialization
-        int getCodePoint(AbstractTruffleString string, RubyEncoding encoding, int byteIndex,
-                @Cached TruffleString.CodePointAtByteIndexNode getCodePointNode,
+        static int getCodePoint(Node node, AbstractTruffleString string, RubyEncoding encoding, int byteIndex,
+                @Cached(inline = false) TruffleString.CodePointAtByteIndexNode getCodePointNode,
                 @Cached InlinedBranchProfile badCodePointProfile) {
             int codePoint = getCodePointNode.execute(string, byteIndex, encoding.tencoding,
                     ErrorHandling.RETURN_NEGATIVE);
             if (codePoint == -1) {
-                badCodePointProfile.enter(this);
-                throw new RaiseException(getContext(),
-                        coreExceptions().argumentErrorInvalidByteSequence(encoding, this));
+                badCodePointProfile.enter(node);
+                throw new RaiseException(getContext(node),
+                        coreExceptions(node).argumentErrorInvalidByteSequence(encoding, node));
             }
             return codePoint;
         }
 
     }
 
+    @GenerateInline
+    @GenerateCached(false)
     public abstract static class StringAppendNode extends RubyBaseNode {
 
-        @NeverDefault
-        public static StringAppendNode create() {
-            return StringHelperNodesFactory.StringAppendNodeGen.create();
-        }
-
-        public abstract RubyString executeStringAppend(Object string, Object other);
+        public abstract RubyString executeStringAppend(Node node, Object string, Object other);
 
         @Specialization(guards = "libOther.isRubyString(other)", limit = "1")
-        static RubyString stringAppend(Object string, Object other,
+        static RubyString stringAppend(Node node, Object string, Object other,
                 @Cached RubyStringLibrary libString,
                 @Cached RubyStringLibrary libOther,
                 @Cached EncodingNodes.CheckStringEncodingNode checkEncodingNode,
-                @Cached TruffleString.ConcatNode concatNode,
-                @Bind("this") Node node) {
+                @Cached(inline = false) TruffleString.ConcatNode concatNode) {
 
             var left = libString.getTString(string);
             var leftEncoding = libString.getEncoding(string);

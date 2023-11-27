@@ -16,6 +16,7 @@ notes: >
   ```ruby
   a.foo = $!
   ```
+yarp_specific: true # generate explicit NilLiteralNode (isImplicit = false)
 focused_on_node: "org.truffleruby.language.exceptions.TryNode"
 ruby: |
   begin
@@ -62,7 +63,7 @@ ast: |
                                               rescueVariableNode =
                                                   RubyCallNode
                                                       attributes:
-                                                          descriptor = org.truffleruby.language.arguments.EmptyArgumentsDescriptor@...
+                                                          descriptor = org.truffleruby.language.arguments.NoKeywordArgumentsDescriptor@...
                                                           dispatchConfig = PROTECTED
                                                           emptyKeywordsProfile = false
                                                           flags = 0
@@ -76,15 +77,14 @@ ast: |
                                                           notRuby2KeywordsHashProfile = false
                                                       children:
                                                           arguments = [
-                                                              DeadNode
+                                                              NilLiteralNode
                                                                   attributes:
                                                                       flags = 0
-                                                                      reason = "YARPTranslator#translateRescueException"
                                                           ]
                                                           receiver =
                                                               RubyCallNode
                                                                   attributes:
-                                                                      descriptor = org.truffleruby.language.arguments.EmptyArgumentsDescriptor@...
+                                                                      descriptor = org.truffleruby.language.arguments.NoKeywordArgumentsDescriptor@...
                                                                       dispatchConfig = PRIVATE
                                                                       emptyKeywordsProfile = false
                                                                       flags = 0

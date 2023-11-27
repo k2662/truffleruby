@@ -2,18 +2,22 @@
 
 New features:
 
+* C/C++ extensions are now compiled using the system toolchain and executed natively instead of using GraalVM LLVM (Sulong). This leads to faster startup, no warmup, better compatibility and faster installation for C/C++ extensions (#3118, @eregon).
 
 Bug fixes:
 
 * Fix `rb_enc_left_char_head()` so it is not always `ArgumentError` (#3267, @eregon).
 * Fix `IO.copy_stream` with a `Tempfile` destination (#3280, @eregon).
 * Fix `Regexp.union` negotiating the wrong result encoding (#3287, @nirvdrum, @simonlevasseur).
+* Fix `Proc#parameters` and return all the numbered parameters lower than the used explicitly ones (@andrykonchin).
 
 Compatibility:
 
 * Add `Exception#detailed_message` method (#3257, @andrykonchin).
 * Fix `rb_enc_vsprintf` and force String encoding instead of converting it (@andrykonchin).
 * Add `rb_gc_mark_movable` function (@andrykonchin).
+* Promote `File#path` and `File#to_path` to `IO#path` and `IO#to_path` and make IO#new accept an optional `path:` keyword argument (#3039, @moste00)
+* Display "unhandled exception" as the message for `RuntimeError` instances with an empty message (#3255, @nirvdrum).
 
 Performance:
 

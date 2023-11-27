@@ -20,7 +20,7 @@ suite = {
             {
                 "name": "regex",
                 "subdir": True,
-                "version": "7f29f8bd69ebeb74f4ba2ce0a7096388bf757dfa",
+                "version": "20b34173b7e15c334d79f0a22ee01889d235748b",
                 "urls": [
                     {"url": "https://github.com/oracle/graal.git", "kind": "git"},
                     {"url": "https://curio.ssw.jku.at/nexus/content/repositories/snapshots", "kind": "binary"},
@@ -29,7 +29,7 @@ suite = {
             {
                 "name": "sulong",
                 "subdir": True,
-                "version": "7f29f8bd69ebeb74f4ba2ce0a7096388bf757dfa",
+                "version": "20b34173b7e15c334d79f0a22ee01889d235748b",
                 "urls": [
                     {"url": "https://github.com/oracle/graal.git", "kind": "git"},
                     {"url": "https://curio.ssw.jku.at/nexus/content/repositories/snapshots", "kind": "binary"},
@@ -219,26 +219,26 @@ suite = {
             "ldflags": ["-pthread"],
         },
 
-        "org.prism.libyarp": {
+        "org.prism.libprism": {
             "class": "YARPNativeProject",
             "dir": "src/main/c/yarp",
             # "makeTarget": "all-no-debug", # Can use this to build without asserts
-            "results": ["build/librubyparser.a"],
+            "results": ["build/libprism.a"],
             "description": "YARP used as a static library"
         },
 
         "org.truffleruby.yarp.bindings": {
             "dir": "src/main/c/yarp_bindings",
             "native": "shared_lib",
-            "deliverable": "yarp",
+            "deliverable": "yarpbindings",
             "buildDependencies": [
-                "org.prism.libyarp", # librubyparser.a
+                "org.prism.libprism", # libprism.a
                 "org.prism", # for the generated JNI header file
             ],
             "use_jdk_headers": True, # the generated JNI header includes jni.h
-            "cflags": ["-g", "-Wall", "-Werror", "-pthread", "-I<path:org.prism.libyarp>/include"],
+            "cflags": ["-g", "-Wall", "-Werror", "-pthread", "-I<path:org.prism.libprism>/include"],
             "ldflags": ["-pthread"],
-            "ldlibs": ["<path:org.prism.libyarp>/build/librubyparser.a"],
+            "ldlibs": ["<path:org.prism.libprism>/build/libprism.a"],
             "description": "JNI bindings for YARP"
         },
 
@@ -381,17 +381,20 @@ suite = {
             "buildDependencies": [
                 "sulong:SULONG_BOOTSTRAP_TOOLCHAIN", # graalvm-native-clang
                 "sulong:SULONG_HOME", # polyglot.h
+                "truffle:TRUFFLE_NFI_NATIVE", # trufflenfi.h
                 "TRUFFLERUBY-BOOTSTRAP-LAUNCHER",
             ],
             "buildEnv": {
                 "TRUFFLERUBY_BOOTSTRAP_LAUNCHER": "<path:TRUFFLERUBY-BOOTSTRAP-LAUNCHER>/miniruby",
                 "GRAALVM_TOOLCHAIN_CC": "<toolchainGetToolPath:native,CC>",
+                "TRUFFLE_NFI_NATIVE_INCLUDE": "<path:truffle:TRUFFLE_NFI_NATIVE>/include",
             },
             "output": ".",
             "results": [
                 "src/main/c/spawn-helper/spawn-helper",
                 "src/main/c/truffleposix/<lib:truffleposix>",
                 "src/main/c/cext/<lib:truffleruby>",
+                "src/main/c/cext-trampoline/<lib:trufflerubytrampoline>",
                 "src/main/c/bigdecimal/<extsuffix:bigdecimal>",
                 "src/main/c/date/<extsuffix:date_core>",
                 "src/main/c/etc/<extsuffix:etc>",
@@ -653,7 +656,6 @@ suite = {
                 ],
                 "lib/cext/": [
                     "file:lib/cext/*.rb",
-                    "file:lib/cext/ABI_version.txt",
                 ],
                 "lib/cext/include/": [
                     "file:lib/cext/include/*",
@@ -697,6 +699,7 @@ suite = {
                 "lib/cext/": [
                     "dependency:org.truffleruby.cext/src/main/c/truffleposix/<lib:truffleposix>",
                     "dependency:org.truffleruby.cext/src/main/c/cext/<lib:truffleruby>",
+                    "dependency:org.truffleruby.cext/src/main/c/cext-trampoline/<lib:trufflerubytrampoline>",
                     "dependency:org.truffleruby.rubysignal",
                 ],
                 # The platform-specific files from debug and rbs, see comment above

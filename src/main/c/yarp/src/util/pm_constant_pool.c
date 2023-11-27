@@ -1,6 +1,8 @@
 #include "prism/util/pm_constant_pool.h"
 
-// Initialize a list of constant ids.
+/**
+ * Initialize a list of constant ids.
+ */
 void
 pm_constant_id_list_init(pm_constant_id_list_t *list) {
     list->ids = NULL;
@@ -8,8 +10,10 @@ pm_constant_id_list_init(pm_constant_id_list_t *list) {
     list->capacity = 0;
 }
 
-// Append a constant id to a list of constant ids. Returns false if any
-// potential reallocations fail.
+/**
+ * Append a constant id to a list of constant ids. Returns false if any
+ * potential reallocations fail.
+ */
 bool
 pm_constant_id_list_append(pm_constant_id_list_t *list, pm_constant_id_t id) {
     if (list->size >= list->capacity) {
@@ -22,7 +26,9 @@ pm_constant_id_list_append(pm_constant_id_list_t *list, pm_constant_id_t id) {
     return true;
 }
 
-// Checks if the current constant id list includes the given constant id.
+/**
+ * Checks if the current constant id list includes the given constant id.
+ */
 bool
 pm_constant_id_list_includes(pm_constant_id_list_t *list, pm_constant_id_t id) {
     for (size_t index = 0; index < list->size; index++) {
@@ -31,13 +37,17 @@ pm_constant_id_list_includes(pm_constant_id_list_t *list, pm_constant_id_t id) {
     return false;
 }
 
-// Get the memory size of a list of constant ids.
+/**
+ * Get the memory size of a list of constant ids.
+ */
 size_t
 pm_constant_id_list_memsize(pm_constant_id_list_t *list) {
     return sizeof(pm_constant_id_list_t) + (list->capacity * sizeof(pm_constant_id_t));
 }
 
-// Free the memory associated with a list of constant ids.
+/**
+ * Free the memory associated with a list of constant ids.
+ */
 void
 pm_constant_id_list_free(pm_constant_id_list_t *list) {
     if (list->ids != NULL) {
@@ -45,8 +55,10 @@ pm_constant_id_list_free(pm_constant_id_list_t *list) {
     }
 }
 
-// A relatively simple hash function (djb2) that is used to hash strings. We are
-// optimizing here for simplicity and speed.
+/**
+ * A relatively simple hash function (djb2) that is used to hash strings. We are
+ * optimizing here for simplicity and speed.
+ */
 static inline uint32_t
 pm_constant_pool_hash(const uint8_t *start, size_t length) {
     // This is a prime number used as the initial value for the hash function.
@@ -59,7 +71,9 @@ pm_constant_pool_hash(const uint8_t *start, size_t length) {
     return value;
 }
 
-// https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+/**
+ * https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+ */
 static uint32_t
 next_power_of_two(uint32_t v) {
     // Avoid underflow in subtraction on next line.
@@ -84,7 +98,9 @@ is_power_of_two(uint32_t size) {
 }
 #endif
 
-// Resize a constant pool to a given capacity.
+/**
+ * Resize a constant pool to a given capacity.
+ */
 static inline bool
 pm_constant_pool_resize(pm_constant_pool_t *pool) {
     assert(is_power_of_two(pool->capacity));
@@ -136,7 +152,9 @@ pm_constant_pool_resize(pm_constant_pool_t *pool) {
     return true;
 }
 
-// Initialize a new constant pool with a given capacity.
+/**
+ * Initialize a new constant pool with a given capacity.
+ */
 bool
 pm_constant_pool_init(pm_constant_pool_t *pool, uint32_t capacity) {
     const uint32_t maximum = (~((uint32_t) 0));
@@ -154,9 +172,20 @@ pm_constant_pool_init(pm_constant_pool_t *pool, uint32_t capacity) {
     return true;
 }
 
-// Insert a constant into a constant pool and return its index in the pool.
+/**
+ * Return a pointer to the constant indicated by the given constant id.
+ */
+pm_constant_t *
+pm_constant_pool_id_to_constant(const pm_constant_pool_t *pool, pm_constant_id_t constant_id) {
+    assert(constant_id > 0 && constant_id <= pool->size);
+    return &pool->constants[constant_id - 1];
+}
+
+/**
+ * Insert a constant into a constant pool and return its index in the pool.
+ */
 static inline pm_constant_id_t
-pm_constant_pool_insert(pm_constant_pool_t *pool, const uint8_t *start, size_t length, bool owned) {
+pm_constant_pool_insert(pm_constant_pool_t *pool, const uint8_t *start, size_t length, pm_constant_pool_bucket_type_t type) {
     if (pool->size >= (pool->capacity / 4 * 3)) {
         if (!pm_constant_pool_resize(pool)) return 0;
     }
@@ -178,19 +207,19 @@ pm_constant_pool_insert(pm_constant_pool_t *pool, const uint8_t *start, size_t l
             // Since we have found a match, we need to check if this is
             // attempting to insert a shared or an owned constant. We want to
             // prefer shared constants since they don't require allocations.
-            if (owned) {
+            if (type == PM_CONSTANT_POOL_BUCKET_OWNED) {
                 // If we're attempting to insert an owned constant and we have
                 // an existing constant, then either way we don't want the given
                 // memory. Either it's duplicated with the existing constant or
                 // it's not necessary because we have a shared version.
                 free((void *) start);
-            } else if (bucket->owned) {
+            } else if (bucket->type == PM_CONSTANT_POOL_BUCKET_OWNED) {
                 // If we're attempting to insert a shared constant and the
                 // existing constant is owned, then we can free the owned
                 // constant and replace it with the shared constant.
                 free((void *) constant->start);
                 constant->start = start;
-                bucket->owned = false;
+                bucket->type = (unsigned int) (PM_CONSTANT_POOL_BUCKET_DEFAULT & 0x3);
             }
 
             return bucket->id;
@@ -202,15 +231,15 @@ pm_constant_pool_insert(pm_constant_pool_t *pool, const uint8_t *start, size_t l
     // IDs are allocated starting at 1, since the value 0 denotes a non-existant
     // constant.
     uint32_t id = ++pool->size;
-    assert(pool->size < ((uint32_t) (1 << 31)));
+    assert(pool->size < ((uint32_t) (1 << 30)));
 
     *bucket = (pm_constant_pool_bucket_t) {
-        .id = (unsigned int) (id & 0x7FFFFFFF),
-        .owned = owned,
+        .id = (unsigned int) (id & 0x3fffffff),
+        .type = (unsigned int) (type & 0x3),
         .hash = hash
     };
 
-    pool->constants[id - 1]  = (pm_constant_t) {
+    pool->constants[id - 1] = (pm_constant_t) {
         .start = start,
         .length = length,
     };
@@ -218,22 +247,37 @@ pm_constant_pool_insert(pm_constant_pool_t *pool, const uint8_t *start, size_t l
     return id;
 }
 
-// Insert a constant into a constant pool. Returns the id of the constant, or 0
-// if any potential calls to resize fail.
+/**
+ * Insert a constant into a constant pool. Returns the id of the constant, or 0
+ * if any potential calls to resize fail.
+ */
 pm_constant_id_t
 pm_constant_pool_insert_shared(pm_constant_pool_t *pool, const uint8_t *start, size_t length) {
-    return pm_constant_pool_insert(pool, start, length, false);
+    return pm_constant_pool_insert(pool, start, length, PM_CONSTANT_POOL_BUCKET_DEFAULT);
 }
 
-// Insert a constant into a constant pool from memory that is now owned by the
-// constant pool. Returns the id of the constant, or 0 if any potential calls to
-// resize fail.
+/**
+ * Insert a constant into a constant pool from memory that is now owned by the
+ * constant pool. Returns the id of the constant, or 0 if any potential calls to
+ * resize fail.
+ */
 pm_constant_id_t
 pm_constant_pool_insert_owned(pm_constant_pool_t *pool, const uint8_t *start, size_t length) {
-    return pm_constant_pool_insert(pool, start, length, true);
+    return pm_constant_pool_insert(pool, start, length, PM_CONSTANT_POOL_BUCKET_OWNED);
 }
 
-// Free the memory associated with a constant pool.
+/**
+ * Insert a constant into a constant pool from memory that is constant. Returns
+ * the id of the constant, or 0 if any potential calls to resize fail.
+ */
+pm_constant_id_t
+pm_constant_pool_insert_constant(pm_constant_pool_t *pool, const uint8_t *start, size_t length) {
+    return pm_constant_pool_insert(pool, start, length, PM_CONSTANT_POOL_BUCKET_CONSTANT);
+}
+
+/**
+ * Free the memory associated with a constant pool.
+ */
 void
 pm_constant_pool_free(pm_constant_pool_t *pool) {
     // For each constant in the current constant pool, free the contents if the
@@ -242,7 +286,7 @@ pm_constant_pool_free(pm_constant_pool_t *pool) {
         pm_constant_pool_bucket_t *bucket = &pool->buckets[index];
 
         // If an id is set on this constant, then we know we have content here.
-        if (bucket->id != 0 && bucket->owned) {
+        if (bucket->id != 0 && bucket->type == PM_CONSTANT_POOL_BUCKET_OWNED) {
             pm_constant_t *constant = &pool->constants[bucket->id - 1];
             free((void *) constant->start);
         }

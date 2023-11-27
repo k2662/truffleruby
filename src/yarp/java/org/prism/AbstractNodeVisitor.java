@@ -284,6 +284,18 @@ public abstract class AbstractNodeVisitor<T> {
         return defaultVisit(node);
     }
 
+    public T visitIndexAndWriteNode(Nodes.IndexAndWriteNode node) {
+        return defaultVisit(node);
+    }
+
+    public T visitIndexOperatorWriteNode(Nodes.IndexOperatorWriteNode node) {
+        return defaultVisit(node);
+    }
+
+    public T visitIndexOrWriteNode(Nodes.IndexOrWriteNode node) {
+        return defaultVisit(node);
+    }
+
     public T visitInstanceVariableAndWriteNode(Nodes.InstanceVariableAndWriteNode node) {
         return defaultVisit(node);
     }
@@ -333,10 +345,6 @@ public abstract class AbstractNodeVisitor<T> {
     }
 
     public T visitKeywordHashNode(Nodes.KeywordHashNode node) {
-        return defaultVisit(node);
-    }
-
-    public T visitKeywordParameterNode(Nodes.KeywordParameterNode node) {
         return defaultVisit(node);
     }
 
@@ -420,6 +428,10 @@ public abstract class AbstractNodeVisitor<T> {
         return defaultVisit(node);
     }
 
+    public T visitOptionalKeywordParameterNode(Nodes.OptionalKeywordParameterNode node) {
+        return defaultVisit(node);
+    }
+
     public T visitOptionalParameterNode(Nodes.OptionalParameterNode node) {
         return defaultVisit(node);
     }
@@ -472,7 +484,7 @@ public abstract class AbstractNodeVisitor<T> {
         return defaultVisit(node);
     }
 
-    public T visitRequiredDestructuredParameterNode(Nodes.RequiredDestructuredParameterNode node) {
+    public T visitRequiredKeywordParameterNode(Nodes.RequiredKeywordParameterNode node) {
         return defaultVisit(node);
     }
 

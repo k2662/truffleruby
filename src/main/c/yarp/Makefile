@@ -11,8 +11,9 @@ FUZZ_OUTPUT_DIR = $(shell pwd)/fuzz/output
 SOEXT := $(shell ruby -e 'puts RbConfig::CONFIG["SOEXT"]')
 
 CPPFLAGS := -Iinclude
-CFLAGS := -g -O2 -std=c99 -Wall -Werror -Wextra -Wpedantic -Wundef -Wconversion -fPIC -fvisibility=hidden
+CFLAGS := -g -O2 -std=c99 -Wall -Werror -Wextra -Wpedantic -Wundef -Wconversion -Wno-missing-braces -fPIC -fvisibility=hidden
 CC := cc
+WASI_SDK_PATH := /opt/wasi-sdk
 
 HEADERS := $(shell find include -name '*.h')
 SOURCES := $(shell find src -name '*.c')
@@ -21,16 +22,21 @@ STATIC_OBJECTS := $(subst src/,build/static/,$(SOURCES:.c=.o))
 
 all: shared static
 
-shared: build/librubyparser.$(SOEXT)
-static: build/librubyparser.a
+shared: build/libprism.$(SOEXT)
+static: build/libprism.a
+wasm: javascript/src/prism.wasm
 
-build/librubyparser.$(SOEXT): $(SHARED_OBJECTS)
+build/libprism.$(SOEXT): $(SHARED_OBJECTS)
 	$(ECHO) "linking $@"
 	$(Q) $(CC) $(DEBUG_FLAGS) $(CFLAGS) -shared -o $@ $(SHARED_OBJECTS)
 
-build/librubyparser.a: $(STATIC_OBJECTS)
+build/libprism.a: $(STATIC_OBJECTS)
 	$(ECHO) "building $@"
 	$(Q) $(AR) $(ARFLAGS) $@ $(STATIC_OBJECTS) $(Q1:0=>/dev/null)
+
+javascript/src/prism.wasm: Makefile $(SOURCES) $(HEADERS)
+	$(ECHO) "building $@"
+	$(Q) $(WASI_SDK_PATH)/bin/clang --sysroot=$(WASI_SDK_PATH)/share/wasi-sysroot/ $(DEBUG_FLAGS) -DPRISM_EXPORT_SYMBOLS -D_WASI_EMULATED_MMAN -lwasi-emulated-mman $(CPPFLAGS) $(CFLAGS) -Wl,--export-all -Wl,--no-entry -mexec-model=reactor -o $@ $(SOURCES)
 
 build/shared/%.o: src/%.c Makefile $(HEADERS)
 	$(ECHO) "compiling $@"
@@ -82,3 +88,9 @@ clean:
 all-no-debug: DEBUG_FLAGS := -DNDEBUG=1
 all-no-debug: OPTFLAGS := -O3
 all-no-debug: all
+
+run: Makefile $(STATIC_OBJECTS) $(HEADERS) test.c
+	$(ECHO) "compiling test.c"
+	$(Q) $(CC) $(CPPFLAGS) $(CFLAGS) $(STATIC_OBJECTS) test.c
+	$(ECHO) "running test.c"
+	$(Q) ./a.out

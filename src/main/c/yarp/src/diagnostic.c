@@ -1,56 +1,55 @@
 #include "prism/diagnostic.h"
 
-/*
-  ## Message composition
-
-  When composing an error message, use sentence fragments.
-
-  Try describing the property of the code that caused the error, rather than the rule that is being
-  violated. It may help to use a fragment that completes a sentence beginning, "The parser
-  encountered (a) ...". If appropriate, add a description of the rule violation (or other helpful
-  context) after a semicolon.
-
-  For example:, instead of "Control escape sequence cannot be doubled", prefer:
-
-  > "Invalid control escape sequence; control cannot be repeated"
-
-  In some cases, where the failure is more general or syntax expectations are violated, it may make
-  more sense to use a fragment that completes a sentence beginning, "The parser ...".
-
-  For example:
-
-  > "Expected an expression after `(`"
-  > "Cannot parse the expression"
-
-
-  ## Message style guide
-
-  - Use articles like "a", "an", and "the" when appropriate.
-    - e.g., prefer "Cannot parse the expression" to "Cannot parse expression".
-  - Use the common name for tokens and nodes.
-    - e.g., prefer "keyword splat" to "assoc splat"
-    - e.g., prefer "embedded document" to "embdoc"
-  - Capitalize the initial word of the message.
-  - Use back ticks around token literals
-    - e.g., "Expected a `=>` between the hash key and value"
-  - Do not use `.` or other punctuation at the end of the message.
-  - Do not use contractions like "can't". Prefer "cannot" to "can not".
-  - For tokens that can have multiple meanings, reference the token and its meaning.
-    - e.g., "`*` splat argument" is clearer and more complete than "splat argument" or "`*` argument"
-
-
-  ## Error names (PM_ERR_*)
-
-  - When appropriate, prefer node name to token name.
-    - e.g., prefer "SPLAT" to "STAR" in the context of argument parsing.
-  - Prefer token name to common name.
-    - e.g., prefer "STAR" to "ASTERISK".
-  - Try to order the words in the name from more general to more specific,
-    - e.g., "INVALID_NUMBER_DECIMAL" is better than "DECIMAL_INVALID_NUMBER".
-    - When in doubt, look for similar patterns and name them so that they are grouped when lexically
-      sorted. See PM_ERR_ARGUMENT_NO_FORWARDING_* for an example.
-*/
-
+/**
+ * ## Message composition
+ *
+ * When composing an error message, use sentence fragments.
+ *
+ * Try describing the property of the code that caused the error, rather than the rule that is being
+ * violated. It may help to use a fragment that completes a sentence beginning, "The parser
+ * encountered (a) ...". If appropriate, add a description of the rule violation (or other helpful
+ * context) after a semicolon.
+ *
+ * For example:, instead of "Control escape sequence cannot be doubled", prefer:
+ *
+ * > "Invalid control escape sequence; control cannot be repeated"
+ *
+ * In some cases, where the failure is more general or syntax expectations are violated, it may make
+ * more sense to use a fragment that completes a sentence beginning, "The parser ...".
+ *
+ * For example:
+ *
+ * > "Expected an expression after `(`"
+ * > "Cannot parse the expression"
+ *
+ *
+ * ## Message style guide
+ *
+ * - Use articles like "a", "an", and "the" when appropriate.
+ *   - e.g., prefer "Cannot parse the expression" to "Cannot parse expression".
+ * - Use the common name for tokens and nodes.
+ *   - e.g., prefer "keyword splat" to "assoc splat"
+ *   - e.g., prefer "embedded document" to "embdoc"
+ * - Capitalize the initial word of the message.
+ * - Use back ticks around token literals
+ *   - e.g., "Expected a `=>` between the hash key and value"
+ * - Do not use `.` or other punctuation at the end of the message.
+ * - Do not use contractions like "can't". Prefer "cannot" to "can not".
+ * - For tokens that can have multiple meanings, reference the token and its meaning.
+ *   - e.g., "`*` splat argument" is clearer and more complete than "splat argument" or "`*` argument"
+ *
+ *
+ * ## Error names (PM_ERR_*)
+ *
+ * - When appropriate, prefer node name to token name.
+ *   - e.g., prefer "SPLAT" to "STAR" in the context of argument parsing.
+ * - Prefer token name to common name.
+ *   - e.g., prefer "STAR" to "ASTERISK".
+ * - Try to order the words in the name from more general to more specific,
+ *   - e.g., "INVALID_NUMBER_DECIMAL" is better than "DECIMAL_INVALID_NUMBER".
+ *   - When in doubt, look for similar patterns and name them so that they are grouped when lexically
+ *     sorted. See PM_ERR_ARGUMENT_NO_FORWARDING_* for an example.
+ */
 static const char* const diagnostic_messages[PM_DIAGNOSTIC_ID_LEN] = {
     [PM_ERR_ALIAS_ARGUMENT]                     = "Invalid argument being passed to `alias`; expected a bare word, symbol, constant, or global variable",
     [PM_ERR_AMPAMPEQ_MULTI_ASSIGN]              = "Unexpected `&&=` in a multiple assignment",
@@ -192,6 +191,7 @@ static const char* const diagnostic_messages[PM_DIAGNOSTIC_ID_LEN] = {
     [PM_ERR_NUMBERED_PARAMETER_NOT_ALLOWED]     = "Numbered parameters are not allowed alongside explicit parameters",
     [PM_ERR_NUMBERED_PARAMETER_OUTER_SCOPE]     = "Numbered parameter is already used in outer scope",
     [PM_ERR_OPERATOR_MULTI_ASSIGN]              = "Unexpected operator for a multiple assignment",
+    [PM_ERR_OPERATOR_WRITE_ARGUMENTS]           = "Unexpected operator after a call with arguments",
     [PM_ERR_OPERATOR_WRITE_BLOCK]               = "Unexpected operator after a call with a block",
     [PM_ERR_PARAMETER_ASSOC_SPLAT_MULTI]        = "Unexpected multiple `**` splat parameters",
     [PM_ERR_PARAMETER_BLOCK_MULTI]              = "Multiple block parameters; only one block is allowed",
@@ -244,6 +244,7 @@ static const char* const diagnostic_messages[PM_DIAGNOSTIC_ID_LEN] = {
     [PM_ERR_UNARY_RECEIVER_PLUS]                = "Expected a receiver for unary `+`",
     [PM_ERR_UNARY_RECEIVER_TILDE]               = "Expected a receiver for unary `~`",
     [PM_ERR_UNTIL_TERM]                         = "Expected an `end` to close the `until` statement",
+    [PM_ERR_VOID_EXPRESSION]                    = "Unexpected void value expression",
     [PM_ERR_WHILE_TERM]                         = "Expected an `end` to close the `while` statement",
     [PM_ERR_WRITE_TARGET_READONLY]              = "Immutable variable as a write target",
     [PM_ERR_WRITE_TARGET_UNEXPECTED]            = "Unexpected write target",
@@ -262,7 +263,9 @@ pm_diagnostic_message(pm_diagnostic_id_t diag_id) {
     return message;
 }
 
-// Append an error to the given list of diagnostic.
+/**
+ * Append an error to the given list of diagnostic.
+ */
 bool
 pm_diagnostic_list_append(pm_list_t *list, const uint8_t *start, const uint8_t *end, pm_diagnostic_id_t diag_id) {
     pm_diagnostic_t *diagnostic = (pm_diagnostic_t *) calloc(sizeof(pm_diagnostic_t), 1);
@@ -273,7 +276,9 @@ pm_diagnostic_list_append(pm_list_t *list, const uint8_t *start, const uint8_t *
     return true;
 }
 
-// Deallocate the internal state of the given diagnostic list.
+/**
+ * Deallocate the internal state of the given diagnostic list.
+ */
 void
 pm_diagnostic_list_free(pm_list_t *list) {
     pm_list_node_t *node, *next;

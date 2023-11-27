@@ -40,16 +40,22 @@ public abstract class Nodes {
 
     public static final class Source {
         public final byte[] bytes;
+        private int startLine;
         private final int[] lineOffsets;
 
         public Source(byte[] bytes) {
-            this(bytes, computeLineOffsets(bytes));
+            this(bytes, 1, computeLineOffsets(bytes));
         }
 
-        public Source(byte[] bytes, int[] lineOffsets) {
+        public Source(byte[] bytes, int startLine, int[] lineOffsets) {
             assert lineOffsets[0] == 0;
             this.bytes = bytes;
+            this.startLine = startLine;
             this.lineOffsets = lineOffsets;
+        }
+
+        public void setStartLine(int startLine) {
+            this.startLine = startLine;
         }
 
         public static int[] computeLineOffsets(byte[] bytes) {
@@ -68,16 +74,23 @@ public abstract class Nodes {
             return Arrays.copyOf(lineOffsets, lineOffsetsSize);
         }
 
+        // 1-based
         public int line(int byteOffset) {
-            assert byteOffset >= 0 && byteOffset < bytes.length : byteOffset;
+            return startLine + findLine(byteOffset);
+        }
+
+        // 0-based
+        public int findLine(int byteOffset) {
+            if (byteOffset >= bytes.length) byteOffset = bytes.length - 1;
+            assert byteOffset >= 0 : byteOffset;
             int index = Arrays.binarySearch(lineOffsets, byteOffset);
             int line;
             if (index < 0) {
-                line = -index - 1;
+                line = -index - 2;
             } else {
-                line = index + 1;
+                line = index;
             }
-            assert line >= 1 && line <= getLineCount() : line;
+            assert line >= 0 && line <= getLineCount() : line;
             return line;
         }
 
@@ -108,7 +121,7 @@ public abstract class Nodes {
         }
 
         public void setNewLineFlag(Source source, boolean[] newlineMarked) {
-            int line = source.line(this.startOffset);
+            int line = source.findLine(this.startOffset);
             if (!newlineMarked[line]) {
                 newlineMarked[line] = true;
                 this.newLineFlag = true;
@@ -129,6 +142,52 @@ public abstract class Nodes {
         protected abstract String toString(String indent);
     }
 
+    /**
+     * Flags for arguments nodes.
+     */
+    public static final class ArgumentsNodeFlags implements Comparable<ArgumentsNodeFlags> {
+
+        // if arguments contain keyword splat
+        public static final short KEYWORD_SPLAT = 1 << 0;
+
+        public static boolean isKeywordSplat(short flags) {
+            return (flags & KEYWORD_SPLAT) != 0;
+        }
+
+        private final short flags;
+
+        public ArgumentsNodeFlags(short flags) {
+            this.flags = flags;
+        }
+
+        @Override
+        public int hashCode() {
+            return flags;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof ArgumentsNodeFlags)) {
+                return false;
+            }
+
+            return flags == ((ArgumentsNodeFlags) other).flags;
+        }
+
+        @Override
+        public int compareTo(ArgumentsNodeFlags other) {
+            return flags - other.flags;
+        }
+
+        public boolean isKeywordSplat() {
+            return (flags & KEYWORD_SPLAT) != 0;
+        }
+
+    }
+
+    /**
+     * Flags for call nodes.
+     */
     public static final class CallNodeFlags implements Comparable<CallNodeFlags> {
 
         // &. operator
@@ -180,6 +239,9 @@ public abstract class Nodes {
 
     }
 
+    /**
+     * Flags for integer nodes that correspond to the base of the integer.
+     */
     public static final class IntegerBaseFlags implements Comparable<IntegerBaseFlags> {
 
         // 0b prefix
@@ -253,6 +315,9 @@ public abstract class Nodes {
 
     }
 
+    /**
+     * Flags for while and until loop nodes.
+     */
     public static final class LoopFlags implements Comparable<LoopFlags> {
 
         // a loop after a begin statement, so the body is executed first before the condition
@@ -293,6 +358,9 @@ public abstract class Nodes {
 
     }
 
+    /**
+     * Flags for range and flip-flop nodes.
+     */
     public static final class RangeFlags implements Comparable<RangeFlags> {
 
         // ... operator
@@ -333,6 +401,9 @@ public abstract class Nodes {
 
     }
 
+    /**
+     * Flags for regular expression and match last line nodes.
+     */
     public static final class RegularExpressionFlags implements Comparable<RegularExpressionFlags> {
 
         // i - ignores the case of characters when matching
@@ -450,6 +521,9 @@ public abstract class Nodes {
 
     }
 
+    /**
+     * Flags for string nodes.
+     */
     public static final class StringFlags implements Comparable<StringFlags> {
 
         // frozen by virtue of a `frozen_string_literal` comment
@@ -490,10 +564,12 @@ public abstract class Nodes {
 
     }
 
-    // Represents the use of the `alias` keyword to alias a global variable.
-    // 
-    //     alias $foo $bar
-    //     ^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `alias` keyword to alias a global variable.
+     *
+     *     alias $foo $bar
+     *     ^^^^^^^^^^^^^^^
+     */
     public static final class AliasGlobalVariableNode extends Node {
         public final Node new_name;
         public final Node old_name;
@@ -536,10 +612,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `alias` keyword to alias a method.
-    // 
-    //     alias foo bar
-    //     ^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `alias` keyword to alias a method.
+     *
+     *     alias foo bar
+     *     ^^^^^^^^^^^^^
+     */
     public static final class AliasMethodNode extends Node {
         public final Node new_name;
         public final Node old_name;
@@ -582,10 +660,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an alternation pattern in pattern matching.
-    // 
-    //     foo => bar | baz
-    //            ^^^^^^^^^
+    /**
+     * Represents an alternation pattern in pattern matching.
+     *
+     *     foo => bar | baz
+     *            ^^^^^^^^^
+     */
     public static final class AlternationPatternNode extends Node {
         public final Node left;
         public final Node right;
@@ -628,10 +708,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `&&` operator or the `and` keyword.
-    // 
-    //     left and right
-    //     ^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `&&` operator or the `and` keyword.
+     *
+     *     left and right
+     *     ^^^^^^^^^^^^^^
+     */
     public static final class AndNode extends Node {
         public final Node left;
         public final Node right;
@@ -674,18 +756,26 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a set of arguments to a method or a keyword.
-    // 
-    //     return foo, bar, baz
-    //            ^^^^^^^^^^^^^
+    /**
+     * Represents a set of arguments to a method or a keyword.
+     *
+     *     return foo, bar, baz
+     *            ^^^^^^^^^^^^^
+     */
     public static final class ArgumentsNode extends Node {
         public final Node[] arguments;
+        public final short flags;
 
-        public ArgumentsNode(Node[] arguments, int startOffset, int length) {
+        public ArgumentsNode(Node[] arguments, short flags, int startOffset, int length) {
             super(startOffset, length);
             this.arguments = arguments;
+            this.flags = flags;
         }
-                
+        
+        public boolean isKeywordSplat() {
+            return ArgumentsNodeFlags.isKeywordSplat(this.flags);
+        }
+        
         public <T> void visitChildNodes(AbstractNodeVisitor<T> visitor) {
             for (Nodes.Node child : this.arguments) {
                 child.accept(visitor);
@@ -716,15 +806,21 @@ public abstract class Nodes {
             for (Node child : this.arguments) {
                 builder.append(nextNextIndent).append(child.toString(nextNextIndent));
             }
+            builder.append(nextIndent);
+            builder.append("flags: ");
+            builder.append(this.flags);
+            builder.append('\n');
             return builder.toString();
         }
     }
 
-    // Represents an array literal. This can be a regular array using brackets or
-    // a special array using % like %w or %i.
-    // 
-    //     [1, 2, 3]
-    //     ^^^^^^^^^
+    /**
+     * Represents an array literal. This can be a regular array using brackets or
+     * a special array using % like %w or %i.
+     *
+     *     [1, 2, 3]
+     *     ^^^^^^^^^
+     */
     public static final class ArrayNode extends Node {
         public final Node[] elements;
 
@@ -767,22 +863,24 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an array pattern in pattern matching.
-    // 
-    //     foo in 1, 2
-    //     ^^^^^^^^^^^
-    // 
-    //     foo in [1, 2]
-    //     ^^^^^^^^^^^^^
-    // 
-    //     foo in *1
-    //     ^^^^^^^^^
-    // 
-    //     foo in Bar[]
-    //     ^^^^^^^^^^^^
-    // 
-    //     foo in Bar[1, 2, 3]
-    //     ^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents an array pattern in pattern matching.
+     *
+     *     foo in 1, 2
+     *     ^^^^^^^^^^^
+     *
+     *     foo in [1, 2]
+     *     ^^^^^^^^^^^^^
+     *
+     *     foo in *1
+     *     ^^^^^^^^^
+     *
+     *     foo in Bar[]
+     *     ^^^^^^^^^^^^
+     *
+     *     foo in Bar[1, 2, 3]
+     *     ^^^^^^^^^^^^^^^^^^^
+     */
     public static final class ArrayPatternNode extends Node {
         /** optional (can be null) */
         public final Node constant;
@@ -859,10 +957,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a hash key/value pair.
-    // 
-    //     { a => b }
-    //       ^^^^^^
+    /**
+     * Represents a hash key/value pair.
+     *
+     *     { a => b }
+     *       ^^^^^^
+     */
     public static final class AssocNode extends Node {
         public final Node key;
         /** optional (can be null) */
@@ -908,10 +1008,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a splat in a hash literal.
-    // 
-    //     { **foo }
-    //       ^^^^^
+    /**
+     * Represents a splat in a hash literal.
+     *
+     *     { **foo }
+     *       ^^^^^
+     */
     public static final class AssocSplatNode extends Node {
         /** optional (can be null) */
         public final Node value;
@@ -951,10 +1053,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents reading a reference to a field in the previous match.
-    // 
-    //     $'
-    //     ^^
+    /**
+     * Represents reading a reference to a field in the previous match.
+     *
+     *     $'
+     *     ^^
+     */
     public static final class BackReferenceReadNode extends Node {
         public final String name;
 
@@ -991,12 +1095,14 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a begin statement.
-    // 
-    //     begin
-    //       foo
-    //     end
-    //     ^^^^^
+    /**
+     * Represents a begin statement.
+     *
+     *     begin
+     *       foo
+     *     end
+     *     ^^^^^
+     */
     public static final class BeginNode extends Node {
         /** optional (can be null) */
         public final StatementsNode statements;
@@ -1068,10 +1174,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents block method arguments.
-    // 
-    //     bar(&args)
-    //     ^^^^^^^^^^
+    /**
+     * Represents block method arguments.
+     *
+     *     bar(&args)
+     *     ^^^^^^^^^^
+     */
     public static final class BlockArgumentNode extends Node {
         /** optional (can be null) */
         public final Node expression;
@@ -1111,10 +1219,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a block local variable.
-    // 
-    //     a { |; b| }
-    //            ^
+    /**
+     * Represents a block local variable.
+     *
+     *     a { |; b| }
+     *            ^
+     */
     public static final class BlockLocalVariableNode extends Node {
         public final String name;
 
@@ -1151,10 +1261,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a block of ruby code.
-    // 
-    // [1, 2, 3].each { |i| puts x }
-    //                ^^^^^^^^^^^^^^
+    /**
+     * Represents a block of ruby code.
+     *
+     * [1, 2, 3].each { |i| puts x }
+     *                ^^^^^^^^^^^^^^
+     */
     public static final class BlockNode extends Node {
         public final String[] locals;
         /** optional (can be null) */
@@ -1212,11 +1324,13 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a block parameter to a method, block, or lambda definition.
-    // 
-    //     def a(&b)
-    //           ^^
-    //     end
+    /**
+     * Represents a block parameter to a method, block, or lambda definition.
+     *
+     *     def a(&b)
+     *           ^^
+     *     end
+     */
     public static final class BlockParameterNode extends Node {
         /** optional (can be null) */
         public final String name;
@@ -1254,14 +1368,16 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a block's parameters declaration.
-    // 
-    //     -> (a, b = 1; local) { }
-    //        ^^^^^^^^^^^^^^^^^
-    // 
-    //     foo do |a, b = 1; local|
-    //            ^^^^^^^^^^^^^^^^^
-    //     end
+    /**
+     * Represents a block's parameters declaration.
+     *
+     *     -> (a, b = 1; local) { }
+     *        ^^^^^^^^^^^^^^^^^
+     *
+     *     foo do |a, b = 1; local|
+     *            ^^^^^^^^^^^^^^^^^
+     *     end
+     */
     public static final class BlockParametersNode extends Node {
         /** optional (can be null) */
         public final ParametersNode parameters;
@@ -1316,10 +1432,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `break` keyword.
-    // 
-    //     break foo
-    //     ^^^^^^^^^
+    /**
+     * Represents the use of the `break` keyword.
+     *
+     *     break foo
+     *     ^^^^^^^^^
+     */
     public static final class BreakNode extends Node {
         /** optional (can be null) */
         public final ArgumentsNode arguments;
@@ -1359,24 +1477,23 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `&&=` operator on a call.
-    // 
-    //     foo.bar &&= value
-    //     ^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `&&=` operator on a call.
+     *
+     *     foo.bar &&= value
+     *     ^^^^^^^^^^^^^^^^^
+     */
     public static final class CallAndWriteNode extends Node {
         /** optional (can be null) */
         public final Node receiver;
-        /** optional (can be null) */
-        public final ArgumentsNode arguments;
         public final short flags;
         public final String read_name;
         public final String write_name;
         public final Node value;
 
-        public CallAndWriteNode(Node receiver, ArgumentsNode arguments, short flags, String read_name, String write_name, Node value, int startOffset, int length) {
+        public CallAndWriteNode(Node receiver, short flags, String read_name, String write_name, Node value, int startOffset, int length) {
             super(startOffset, length);
             this.receiver = receiver;
-            this.arguments = arguments;
             this.flags = flags;
             this.read_name = read_name;
             this.write_name = write_name;
@@ -1395,14 +1512,11 @@ public abstract class Nodes {
             if (this.receiver != null) {
                 this.receiver.accept(visitor);
             }
-            if (this.arguments != null) {
-                this.arguments.accept(visitor);
-            }
             this.value.accept(visitor);
         }
 
         public Node[] childNodes() {
-            return new Node[] { this.receiver, this.arguments, this.value };
+            return new Node[] { this.receiver, this.value };
         }
 
         public <T> T accept(AbstractNodeVisitor<T> visitor) {
@@ -1422,9 +1536,6 @@ public abstract class Nodes {
             builder.append("receiver: ");
             builder.append(this.receiver == null ? "null\n" : this.receiver.toString(nextIndent));
             builder.append(nextIndent);
-            builder.append("arguments: ");
-            builder.append(this.arguments == null ? "null\n" : this.arguments.toString(nextIndent));
-            builder.append(nextIndent);
             builder.append("flags: ");
             builder.append(this.flags);
             builder.append('\n');
@@ -1443,25 +1554,27 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a method call, in all of the various forms that can take.
-    // 
-    //     foo
-    //     ^^^
-    // 
-    //     foo()
-    //     ^^^^^
-    // 
-    //     +foo
-    //     ^^^^
-    // 
-    //     foo + bar
-    //     ^^^^^^^^^
-    // 
-    //     foo.bar
-    //     ^^^^^^^
-    // 
-    //     foo&.bar
-    //     ^^^^^^^^
+    /**
+     * Represents a method call, in all of the various forms that can take.
+     *
+     *     foo
+     *     ^^^
+     *
+     *     foo()
+     *     ^^^^^
+     *
+     *     +foo
+     *     ^^^^
+     *
+     *     foo + bar
+     *     ^^^^^^^^^
+     *
+     *     foo.bar
+     *     ^^^^^^^
+     *
+     *     foo&.bar
+     *     ^^^^^^^^
+     */
     public static final class CallNode extends Node {
         /** optional (can be null) */
         public final Node receiver;
@@ -1539,25 +1652,24 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of an assignment operator on a call.
-    // 
-    //     foo.bar += baz
-    //     ^^^^^^^^^^^^^^
+    /**
+     * Represents the use of an assignment operator on a call.
+     *
+     *     foo.bar += baz
+     *     ^^^^^^^^^^^^^^
+     */
     public static final class CallOperatorWriteNode extends Node {
         /** optional (can be null) */
         public final Node receiver;
-        /** optional (can be null) */
-        public final ArgumentsNode arguments;
         public final short flags;
         public final String read_name;
         public final String write_name;
         public final String operator;
         public final Node value;
 
-        public CallOperatorWriteNode(Node receiver, ArgumentsNode arguments, short flags, String read_name, String write_name, String operator, Node value, int startOffset, int length) {
+        public CallOperatorWriteNode(Node receiver, short flags, String read_name, String write_name, String operator, Node value, int startOffset, int length) {
             super(startOffset, length);
             this.receiver = receiver;
-            this.arguments = arguments;
             this.flags = flags;
             this.read_name = read_name;
             this.write_name = write_name;
@@ -1577,14 +1689,11 @@ public abstract class Nodes {
             if (this.receiver != null) {
                 this.receiver.accept(visitor);
             }
-            if (this.arguments != null) {
-                this.arguments.accept(visitor);
-            }
             this.value.accept(visitor);
         }
 
         public Node[] childNodes() {
-            return new Node[] { this.receiver, this.arguments, this.value };
+            return new Node[] { this.receiver, this.value };
         }
 
         public <T> T accept(AbstractNodeVisitor<T> visitor) {
@@ -1603,9 +1712,6 @@ public abstract class Nodes {
             builder.append(nextIndent);
             builder.append("receiver: ");
             builder.append(this.receiver == null ? "null\n" : this.receiver.toString(nextIndent));
-            builder.append(nextIndent);
-            builder.append("arguments: ");
-            builder.append(this.arguments == null ? "null\n" : this.arguments.toString(nextIndent));
             builder.append(nextIndent);
             builder.append("flags: ");
             builder.append(this.flags);
@@ -1629,24 +1735,23 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `||=` operator on a call.
-    // 
-    //     foo.bar ||= value
-    //     ^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `||=` operator on a call.
+     *
+     *     foo.bar ||= value
+     *     ^^^^^^^^^^^^^^^^^
+     */
     public static final class CallOrWriteNode extends Node {
         /** optional (can be null) */
         public final Node receiver;
-        /** optional (can be null) */
-        public final ArgumentsNode arguments;
         public final short flags;
         public final String read_name;
         public final String write_name;
         public final Node value;
 
-        public CallOrWriteNode(Node receiver, ArgumentsNode arguments, short flags, String read_name, String write_name, Node value, int startOffset, int length) {
+        public CallOrWriteNode(Node receiver, short flags, String read_name, String write_name, Node value, int startOffset, int length) {
             super(startOffset, length);
             this.receiver = receiver;
-            this.arguments = arguments;
             this.flags = flags;
             this.read_name = read_name;
             this.write_name = write_name;
@@ -1665,14 +1770,11 @@ public abstract class Nodes {
             if (this.receiver != null) {
                 this.receiver.accept(visitor);
             }
-            if (this.arguments != null) {
-                this.arguments.accept(visitor);
-            }
             this.value.accept(visitor);
         }
 
         public Node[] childNodes() {
-            return new Node[] { this.receiver, this.arguments, this.value };
+            return new Node[] { this.receiver, this.value };
         }
 
         public <T> T accept(AbstractNodeVisitor<T> visitor) {
@@ -1692,9 +1794,6 @@ public abstract class Nodes {
             builder.append("receiver: ");
             builder.append(this.receiver == null ? "null\n" : this.receiver.toString(nextIndent));
             builder.append(nextIndent);
-            builder.append("arguments: ");
-            builder.append(this.arguments == null ? "null\n" : this.arguments.toString(nextIndent));
-            builder.append(nextIndent);
             builder.append("flags: ");
             builder.append(this.flags);
             builder.append('\n');
@@ -1713,10 +1812,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents assigning to a local variable in pattern matching.
-    // 
-    //     foo => [bar => baz]
-    //            ^^^^^^^^^^^^
+    /**
+     * Represents assigning to a local variable in pattern matching.
+     *
+     *     foo => [bar => baz]
+     *            ^^^^^^^^^^^^
+     */
     public static final class CapturePatternNode extends Node {
         public final Node value;
         public final Node target;
@@ -1759,12 +1860,14 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of a case statement.
-    // 
-    // case true
-    // ^^^^^^^^^
-    // when false
-    // end
+    /**
+     * Represents the use of a case statement.
+     *
+     *     case true
+     *     when false
+     *     end
+     *     ^^^^^^^^^^
+     */
     public static final class CaseNode extends Node {
         /** optional (can be null) */
         public final Node predicate;
@@ -1829,10 +1932,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a class declaration involving the `class` keyword.
-    // 
-    //     class Foo end
-    //     ^^^^^^^^^^^^^
+    /**
+     * Represents a class declaration involving the `class` keyword.
+     *
+     *     class Foo end
+     *     ^^^^^^^^^^^^^
+     */
     public static final class ClassNode extends Node {
         public final String[] locals;
         public final Node constant_path;
@@ -1902,10 +2007,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `&&=` operator for assignment to a class variable.
-    // 
-    //     @@target &&= value
-    //     ^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `&&=` operator for assignment to a class variable.
+     *
+     *     @@target &&= value
+     *     ^^^^^^^^^^^^^^^^^^
+     */
     public static final class ClassVariableAndWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -1948,10 +2055,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents assigning to a class variable using an operator that isn't `=`.
-    // 
-    //     @@target += value
-    //     ^^^^^^^^^^^^^^^^^
+    /**
+     * Represents assigning to a class variable using an operator that isn't `=`.
+     *
+     *     @@target += value
+     *     ^^^^^^^^^^^^^^^^^
+     */
     public static final class ClassVariableOperatorWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -2000,10 +2109,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `||=` operator for assignment to a class variable.
-    // 
-    //     @@target ||= value
-    //     ^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `||=` operator for assignment to a class variable.
+     *
+     *     @@target ||= value
+     *     ^^^^^^^^^^^^^^^^^^
+     */
     public static final class ClassVariableOrWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -2046,10 +2157,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents referencing a class variable.
-    // 
-    //     @@foo
-    //     ^^^^^
+    /**
+     * Represents referencing a class variable.
+     *
+     *     @@foo
+     *     ^^^^^
+     */
     public static final class ClassVariableReadNode extends Node {
         public final String name;
 
@@ -2086,10 +2199,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to a class variable in a context that doesn't have an explicit value.
-    // 
-    //     @@foo, @@bar = baz
-    //     ^^^^^  ^^^^^
+    /**
+     * Represents writing to a class variable in a context that doesn't have an explicit value.
+     *
+     *     @@foo, @@bar = baz
+     *     ^^^^^  ^^^^^
+     */
     public static final class ClassVariableTargetNode extends Node {
         public final String name;
 
@@ -2126,10 +2241,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to a class variable.
-    // 
-    //     @@foo = 1
-    //     ^^^^^^^^^
+    /**
+     * Represents writing to a class variable.
+     *
+     *     @@foo = 1
+     *     ^^^^^^^^^
+     */
     public static final class ClassVariableWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -2172,10 +2289,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `&&=` operator for assignment to a constant.
-    // 
-    //     Target &&= value
-    //     ^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `&&=` operator for assignment to a constant.
+     *
+     *     Target &&= value
+     *     ^^^^^^^^^^^^^^^^
+     */
     public static final class ConstantAndWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -2218,10 +2337,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents assigning to a constant using an operator that isn't `=`.
-    // 
-    //     Target += value
-    //     ^^^^^^^^^^^^^^^
+    /**
+     * Represents assigning to a constant using an operator that isn't `=`.
+     *
+     *     Target += value
+     *     ^^^^^^^^^^^^^^^
+     */
     public static final class ConstantOperatorWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -2270,10 +2391,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `||=` operator for assignment to a constant.
-    // 
-    //     Target ||= value
-    //     ^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `||=` operator for assignment to a constant.
+     *
+     *     Target ||= value
+     *     ^^^^^^^^^^^^^^^^
+     */
     public static final class ConstantOrWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -2316,10 +2439,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `&&=` operator for assignment to a constant path.
-    // 
-    //     Parent::Child &&= value
-    //     ^^^^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `&&=` operator for assignment to a constant path.
+     *
+     *     Parent::Child &&= value
+     *     ^^^^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class ConstantPathAndWriteNode extends Node {
         public final ConstantPathNode target;
         public final Node value;
@@ -2362,10 +2487,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents accessing a constant through a path of `::` operators.
-    // 
-    //     Foo::Bar
-    //     ^^^^^^^^
+    /**
+     * Represents accessing a constant through a path of `::` operators.
+     *
+     *     Foo::Bar
+     *     ^^^^^^^^
+     */
     public static final class ConstantPathNode extends Node {
         /** optional (can be null) */
         public final Node parent;
@@ -2411,10 +2538,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents assigning to a constant path using an operator that isn't `=`.
-    // 
-    //     Parent::Child += value
-    //     ^^^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents assigning to a constant path using an operator that isn't `=`.
+     *
+     *     Parent::Child += value
+     *     ^^^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class ConstantPathOperatorWriteNode extends Node {
         public final ConstantPathNode target;
         public final Node value;
@@ -2463,10 +2592,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `||=` operator for assignment to a constant path.
-    // 
-    //     Parent::Child ||= value
-    //     ^^^^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `||=` operator for assignment to a constant path.
+     *
+     *     Parent::Child ||= value
+     *     ^^^^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class ConstantPathOrWriteNode extends Node {
         public final ConstantPathNode target;
         public final Node value;
@@ -2509,10 +2640,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to a constant path in a context that doesn't have an explicit value.
-    // 
-    //     Foo::Foo, Bar::Bar = baz
-    //     ^^^^^^^^  ^^^^^^^^
+    /**
+     * Represents writing to a constant path in a context that doesn't have an explicit value.
+     *
+     *     Foo::Foo, Bar::Bar = baz
+     *     ^^^^^^^^  ^^^^^^^^
+     */
     public static final class ConstantPathTargetNode extends Node {
         /** optional (can be null) */
         public final Node parent;
@@ -2558,16 +2691,18 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to a constant path.
-    // 
-    //     ::Foo = 1
-    //     ^^^^^^^^^
-    // 
-    //     Foo::Bar = 1
-    //     ^^^^^^^^^^^^
-    // 
-    //     ::Foo::Bar = 1
-    //     ^^^^^^^^^^^^^^
+    /**
+     * Represents writing to a constant path.
+     *
+     *     ::Foo = 1
+     *     ^^^^^^^^^
+     *
+     *     Foo::Bar = 1
+     *     ^^^^^^^^^^^^
+     *
+     *     ::Foo::Bar = 1
+     *     ^^^^^^^^^^^^^^
+     */
     public static final class ConstantPathWriteNode extends Node {
         public final ConstantPathNode target;
         public final Node value;
@@ -2610,10 +2745,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents referencing a constant.
-    // 
-    //     Foo
-    //     ^^^
+    /**
+     * Represents referencing a constant.
+     *
+     *     Foo
+     *     ^^^
+     */
     public static final class ConstantReadNode extends Node {
         public final String name;
 
@@ -2650,10 +2787,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to a constant in a context that doesn't have an explicit value.
-    // 
-    //     Foo, Bar = baz
-    //     ^^^  ^^^
+    /**
+     * Represents writing to a constant in a context that doesn't have an explicit value.
+     *
+     *     Foo, Bar = baz
+     *     ^^^  ^^^
+     */
     public static final class ConstantTargetNode extends Node {
         public final String name;
 
@@ -2690,10 +2829,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to a constant.
-    // 
-    //     Foo = 1
-    //     ^^^^^^^
+    /**
+     * Represents writing to a constant.
+     *
+     *     Foo = 1
+     *     ^^^^^^^
+     */
     public static final class ConstantWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -2736,11 +2877,13 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a method definition.
-    // 
-    //     def method
-    //     end
-    //     ^^^^^^^^^^
+    /**
+     * Represents a method definition.
+     *
+     *     def method
+     *     end
+     *     ^^^^^^^^^^
+     */
     public static final class DefNode extends Node {
         public final int serializedLength;
         public final String name;
@@ -2815,10 +2958,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `defined?` keyword.
-    // 
-    //     defined?(a)
-    //     ^^^^^^^^^^^
+    /**
+     * Represents the use of the `defined?` keyword.
+     *
+     *     defined?(a)
+     *     ^^^^^^^^^^^
+     */
     public static final class DefinedNode extends Node {
         public final Node value;
 
@@ -2855,10 +3000,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an `else` clause in a `case`, `if`, or `unless` statement.
-    // 
-    //     if a then b else c end
-    //                 ^^^^^^^^^^
+    /**
+     * Represents an `else` clause in a `case`, `if`, or `unless` statement.
+     *
+     *     if a then b else c end
+     *                 ^^^^^^^^^^
+     */
     public static final class ElseNode extends Node {
         /** optional (can be null) */
         public final StatementsNode statements;
@@ -2898,10 +3045,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an interpolated set of statements.
-    // 
-    //     "foo #{bar}"
-    //          ^^^^^^
+    /**
+     * Represents an interpolated set of statements.
+     *
+     *     "foo #{bar}"
+     *          ^^^^^^
+     */
     public static final class EmbeddedStatementsNode extends Node {
         /** optional (can be null) */
         public final StatementsNode statements;
@@ -2941,10 +3090,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an interpolated variable.
-    // 
-    //     "foo #@bar"
-    //          ^^^^^
+    /**
+     * Represents an interpolated variable.
+     *
+     *     "foo #@bar"
+     *          ^^^^^
+     */
     public static final class EmbeddedVariableNode extends Node {
         public final Node variable;
 
@@ -2981,14 +3132,16 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an `ensure` clause in a `begin` statement.
-    // 
-    //     begin
-    //       foo
-    //     ensure
-    //     ^^^^^^
-    //       bar
-    //     end
+    /**
+     * Represents an `ensure` clause in a `begin` statement.
+     *
+     *     begin
+     *       foo
+     *     ensure
+     *     ^^^^^^
+     *       bar
+     *     end
+     */
     public static final class EnsureNode extends Node {
         /** optional (can be null) */
         public final StatementsNode statements;
@@ -3028,10 +3181,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the literal `false` keyword.
-    // 
-    //     false
-    //     ^^^^^
+    /**
+     * Represents the use of the literal `false` keyword.
+     *
+     *     false
+     *     ^^^^^
+     */
     public static final class FalseNode extends Node {
 
         public FalseNode(int startOffset, int length) {
@@ -3062,16 +3217,18 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a find pattern in pattern matching.
-    // 
-    //     foo in *bar, baz, *qux
-    //     ^^^^^^^^^^^^^^^^^^^^^^
-    // 
-    //     foo in [*bar, baz, *qux]
-    //     ^^^^^^^^^^^^^^^^^^^^^^^^
-    // 
-    //     foo in Foo(*bar, baz, *qux)
-    //     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents a find pattern in pattern matching.
+     *
+     *     foo in *bar, baz, *qux
+     *            ^^^^^^^^^^^^^^^
+     *
+     *     foo in [*bar, baz, *qux]
+     *            ^^^^^^^^^^^^^^^^^
+     *
+     *     foo in Foo(*bar, baz, *qux)
+     *            ^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class FindPatternNode extends Node {
         /** optional (can be null) */
         public final Node constant;
@@ -3140,10 +3297,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `..` or `...` operators to create flip flops.
-    // 
-    //     baz if foo .. bar
-    //            ^^^^^^^^^^
+    /**
+     * Represents the use of the `..` or `...` operators to create flip flops.
+     *
+     *     baz if foo .. bar
+     *            ^^^^^^^^^^
+     */
     public static final class FlipFlopNode extends Node {
         /** optional (can be null) */
         public final Node left;
@@ -3202,10 +3361,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a floating point number literal.
-    // 
-    //     1.0
-    //     ^^^
+    /**
+     * Represents a floating point number literal.
+     *
+     *     1.0
+     *     ^^^
+     */
     public static final class FloatNode extends Node {
 
         public FloatNode(int startOffset, int length) {
@@ -3236,10 +3397,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `for` keyword.
-    // 
-    //     for i in a end
-    //     ^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `for` keyword.
+     *
+     *     for i in a end
+     *     ^^^^^^^^^^^^^^
+     */
     public static final class ForNode extends Node {
         public final Node index;
         public final Node collection;
@@ -3291,12 +3454,14 @@ public abstract class Nodes {
         }
     }
 
-    // Represents forwarding all arguments to this method to another method.
-    // 
-    //     def foo(...)
-    //       bar(...)
-    //       ^^^^^^^^
-    //     end
+    /**
+     * Represents forwarding all arguments to this method to another method.
+     *
+     *     def foo(...)
+     *       bar(...)
+     *           ^^^
+     *     end
+     */
     public static final class ForwardingArgumentsNode extends Node {
 
         public ForwardingArgumentsNode(int startOffset, int length) {
@@ -3327,11 +3492,13 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the forwarding parameter in a method, block, or lambda declaration.
-    // 
-    //     def foo(...)
-    //             ^^^
-    //     end
+    /**
+     * Represents the use of the forwarding parameter in a method, block, or lambda declaration.
+     *
+     *     def foo(...)
+     *             ^^^
+     *     end
+     */
     public static final class ForwardingParameterNode extends Node {
 
         public ForwardingParameterNode(int startOffset, int length) {
@@ -3362,10 +3529,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `super` keyword without parentheses or arguments.
-    // 
-    //     super
-    //     ^^^^^
+    /**
+     * Represents the use of the `super` keyword without parentheses or arguments.
+     *
+     *     super
+     *     ^^^^^
+     */
     public static final class ForwardingSuperNode extends Node {
         /** optional (can be null) */
         public final BlockNode block;
@@ -3405,10 +3574,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `&&=` operator for assignment to a global variable.
-    // 
-    //     $target &&= value
-    //     ^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `&&=` operator for assignment to a global variable.
+     *
+     *     $target &&= value
+     *     ^^^^^^^^^^^^^^^^^
+     */
     public static final class GlobalVariableAndWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -3451,10 +3622,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents assigning to a global variable using an operator that isn't `=`.
-    // 
-    //     $target += value
-    //     ^^^^^^^^^^^^^^^^
+    /**
+     * Represents assigning to a global variable using an operator that isn't `=`.
+     *
+     *     $target += value
+     *     ^^^^^^^^^^^^^^^^
+     */
     public static final class GlobalVariableOperatorWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -3503,10 +3676,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `||=` operator for assignment to a global variable.
-    // 
-    //     $target ||= value
-    //     ^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `||=` operator for assignment to a global variable.
+     *
+     *     $target ||= value
+     *     ^^^^^^^^^^^^^^^^^
+     */
     public static final class GlobalVariableOrWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -3549,10 +3724,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents referencing a global variable.
-    // 
-    //     $foo
-    //     ^^^^
+    /**
+     * Represents referencing a global variable.
+     *
+     *     $foo
+     *     ^^^^
+     */
     public static final class GlobalVariableReadNode extends Node {
         public final String name;
 
@@ -3589,10 +3766,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to a global variable in a context that doesn't have an explicit value.
-    // 
-    //     $foo, $bar = baz
-    //     ^^^^  ^^^^
+    /**
+     * Represents writing to a global variable in a context that doesn't have an explicit value.
+     *
+     *     $foo, $bar = baz
+     *     ^^^^  ^^^^
+     */
     public static final class GlobalVariableTargetNode extends Node {
         public final String name;
 
@@ -3629,10 +3808,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to a global variable.
-    // 
-    //     $foo = 1
-    //     ^^^^^^^^
+    /**
+     * Represents writing to a global variable.
+     *
+     *     $foo = 1
+     *     ^^^^^^^^
+     */
     public static final class GlobalVariableWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -3675,10 +3856,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a hash literal.
-    // 
-    //     { a => b }
-    //     ^^^^^^^^^^
+    /**
+     * Represents a hash literal.
+     *
+     *     { a => b }
+     *     ^^^^^^^^^^
+     */
     public static final class HashNode extends Node {
         public final Node[] elements;
 
@@ -3721,44 +3904,46 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a hash pattern in pattern matching.
-    // 
-    //     foo => { a: 1, b: 2 }
-    //            ^^^^^^^^^^^^^^
-    // 
-    //     foo => { a: 1, b: 2, **c }
-    //            ^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents a hash pattern in pattern matching.
+     *
+     *     foo => { a: 1, b: 2 }
+     *            ^^^^^^^^^^^^^^
+     *
+     *     foo => { a: 1, b: 2, **c }
+     *            ^^^^^^^^^^^^^^^^^^^
+     */
     public static final class HashPatternNode extends Node {
         /** optional (can be null) */
         public final Node constant;
-        public final Node[] assocs;
+        public final Node[] elements;
         /** optional (can be null) */
-        public final Node kwrest;
+        public final Node rest;
 
-        public HashPatternNode(Node constant, Node[] assocs, Node kwrest, int startOffset, int length) {
+        public HashPatternNode(Node constant, Node[] elements, Node rest, int startOffset, int length) {
             super(startOffset, length);
             this.constant = constant;
-            this.assocs = assocs;
-            this.kwrest = kwrest;
+            this.elements = elements;
+            this.rest = rest;
         }
                 
         public <T> void visitChildNodes(AbstractNodeVisitor<T> visitor) {
             if (this.constant != null) {
                 this.constant.accept(visitor);
             }
-            for (Nodes.Node child : this.assocs) {
+            for (Nodes.Node child : this.elements) {
                 child.accept(visitor);
             }
-            if (this.kwrest != null) {
-                this.kwrest.accept(visitor);
+            if (this.rest != null) {
+                this.rest.accept(visitor);
             }
         }
 
         public Node[] childNodes() {
             ArrayList<Node> childNodes = new ArrayList<>();
             childNodes.add(this.constant);
-            childNodes.addAll(Arrays.asList(this.assocs));
-            childNodes.add(this.kwrest);
+            childNodes.addAll(Arrays.asList(this.elements));
+            childNodes.add(this.rest);
             return childNodes.toArray(EMPTY_ARRAY);
         }
 
@@ -3780,25 +3965,27 @@ public abstract class Nodes {
             builder.append("constant: ");
             builder.append(this.constant == null ? "null\n" : this.constant.toString(nextIndent));
             builder.append(nextIndent);
-            builder.append("assocs: ");
+            builder.append("elements: ");
             builder.append('\n');
-            for (Node child : this.assocs) {
+            for (Node child : this.elements) {
                 builder.append(nextNextIndent).append(child.toString(nextNextIndent));
             }
             builder.append(nextIndent);
-            builder.append("kwrest: ");
-            builder.append(this.kwrest == null ? "null\n" : this.kwrest.toString(nextIndent));
+            builder.append("rest: ");
+            builder.append(this.rest == null ? "null\n" : this.rest.toString(nextIndent));
             return builder.toString();
         }
     }
 
-    // Represents the use of the `if` keyword, either in the block form or the modifier form.
-    // 
-    //     bar if foo
-    //     ^^^^^^^^^^
-    // 
-    //     if foo then bar end
-    //     ^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `if` keyword, either in the block form or the modifier form.
+     *
+     *     bar if foo
+     *     ^^^^^^^^^^
+     *
+     *     if foo then bar end
+     *     ^^^^^^^^^^^^^^^^^^^
+     */
     public static final class IfNode extends Node {
         public final Node predicate;
         /** optional (can be null) */
@@ -3858,10 +4045,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an imaginary number literal.
-    // 
-    //     1.0i
-    //     ^^^^
+    /**
+     * Represents an imaginary number literal.
+     *
+     *     1.0i
+     *     ^^^^
+     */
     public static final class ImaginaryNode extends Node {
         public final Node numeric;
 
@@ -3898,14 +4087,16 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a node that is implicitly being added to the tree but doesn't
-    // correspond directly to a node in the source.
-    // 
-    //     { foo: }
-    //       ^^^^
-    // 
-    //     { Foo: }
-    //       ^^^^
+    /**
+     * Represents a node that is implicitly being added to the tree but doesn't
+     * correspond directly to a node in the source.
+     *
+     *     { foo: }
+     *       ^^^^
+     *
+     *     { Foo: }
+     *       ^^^^
+     */
     public static final class ImplicitNode extends Node {
         public final Node value;
 
@@ -3942,10 +4133,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `in` keyword in a case statement.
-    // 
-    //     case a; in b then c end
-    //             ^^^^^^^^^^^
+    /**
+     * Represents the use of the `in` keyword in a case statement.
+     *
+     *     case a; in b then c end
+     *             ^^^^^^^^^^^
+     */
     public static final class InNode extends Node {
         public final Node pattern;
         /** optional (can be null) */
@@ -3991,10 +4184,267 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `&&=` operator for assignment to an instance variable.
-    // 
-    //     @target &&= value
-    //     ^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `&&=` operator on a call to the `[]` method.
+     *
+     *     foo.bar[baz] &&= value
+     *     ^^^^^^^^^^^^^^^^^^^^^^
+     */
+    public static final class IndexAndWriteNode extends Node {
+        /** optional (can be null) */
+        public final Node receiver;
+        /** optional (can be null) */
+        public final ArgumentsNode arguments;
+        /** optional (can be null) */
+        public final Node block;
+        public final short flags;
+        public final Node value;
+
+        public IndexAndWriteNode(Node receiver, ArgumentsNode arguments, Node block, short flags, Node value, int startOffset, int length) {
+            super(startOffset, length);
+            this.receiver = receiver;
+            this.arguments = arguments;
+            this.block = block;
+            this.flags = flags;
+            this.value = value;
+        }
+        
+        public boolean isSafeNavigation() {
+            return CallNodeFlags.isSafeNavigation(this.flags);
+        }
+
+        public boolean isVariableCall() {
+            return CallNodeFlags.isVariableCall(this.flags);
+        }
+        
+        public <T> void visitChildNodes(AbstractNodeVisitor<T> visitor) {
+            if (this.receiver != null) {
+                this.receiver.accept(visitor);
+            }
+            if (this.arguments != null) {
+                this.arguments.accept(visitor);
+            }
+            if (this.block != null) {
+                this.block.accept(visitor);
+            }
+            this.value.accept(visitor);
+        }
+
+        public Node[] childNodes() {
+            return new Node[] { this.receiver, this.arguments, this.block, this.value };
+        }
+
+        public <T> T accept(AbstractNodeVisitor<T> visitor) {
+            return visitor.visitIndexAndWriteNode(this);
+        }
+
+        @Override
+        protected String toString(String indent) {
+            StringBuilder builder = new StringBuilder();
+            builder.append(this.getClass().getSimpleName());
+            if (hasNewLineFlag()) {
+                builder.append("[Li]");
+            }
+            builder.append('\n');
+            String nextIndent = indent + "  ";
+            builder.append(nextIndent);
+            builder.append("receiver: ");
+            builder.append(this.receiver == null ? "null\n" : this.receiver.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("arguments: ");
+            builder.append(this.arguments == null ? "null\n" : this.arguments.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("block: ");
+            builder.append(this.block == null ? "null\n" : this.block.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("flags: ");
+            builder.append(this.flags);
+            builder.append('\n');
+            builder.append(nextIndent);
+            builder.append("value: ");
+            builder.append(this.value.toString(nextIndent));
+            return builder.toString();
+        }
+    }
+
+    /**
+     * Represents the use of an assignment operator on a call to `[]`.
+     *
+     *     foo.bar[baz] += value
+     *     ^^^^^^^^^^^^^^^^^^^^^
+     */
+    public static final class IndexOperatorWriteNode extends Node {
+        /** optional (can be null) */
+        public final Node receiver;
+        /** optional (can be null) */
+        public final ArgumentsNode arguments;
+        /** optional (can be null) */
+        public final Node block;
+        public final short flags;
+        public final String operator;
+        public final Node value;
+
+        public IndexOperatorWriteNode(Node receiver, ArgumentsNode arguments, Node block, short flags, String operator, Node value, int startOffset, int length) {
+            super(startOffset, length);
+            this.receiver = receiver;
+            this.arguments = arguments;
+            this.block = block;
+            this.flags = flags;
+            this.operator = operator;
+            this.value = value;
+        }
+        
+        public boolean isSafeNavigation() {
+            return CallNodeFlags.isSafeNavigation(this.flags);
+        }
+
+        public boolean isVariableCall() {
+            return CallNodeFlags.isVariableCall(this.flags);
+        }
+        
+        public <T> void visitChildNodes(AbstractNodeVisitor<T> visitor) {
+            if (this.receiver != null) {
+                this.receiver.accept(visitor);
+            }
+            if (this.arguments != null) {
+                this.arguments.accept(visitor);
+            }
+            if (this.block != null) {
+                this.block.accept(visitor);
+            }
+            this.value.accept(visitor);
+        }
+
+        public Node[] childNodes() {
+            return new Node[] { this.receiver, this.arguments, this.block, this.value };
+        }
+
+        public <T> T accept(AbstractNodeVisitor<T> visitor) {
+            return visitor.visitIndexOperatorWriteNode(this);
+        }
+
+        @Override
+        protected String toString(String indent) {
+            StringBuilder builder = new StringBuilder();
+            builder.append(this.getClass().getSimpleName());
+            if (hasNewLineFlag()) {
+                builder.append("[Li]");
+            }
+            builder.append('\n');
+            String nextIndent = indent + "  ";
+            builder.append(nextIndent);
+            builder.append("receiver: ");
+            builder.append(this.receiver == null ? "null\n" : this.receiver.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("arguments: ");
+            builder.append(this.arguments == null ? "null\n" : this.arguments.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("block: ");
+            builder.append(this.block == null ? "null\n" : this.block.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("flags: ");
+            builder.append(this.flags);
+            builder.append('\n');
+            builder.append(nextIndent);
+            builder.append("operator: ");
+            builder.append('"').append(this.operator).append('"');
+            builder.append('\n');
+            builder.append(nextIndent);
+            builder.append("value: ");
+            builder.append(this.value.toString(nextIndent));
+            return builder.toString();
+        }
+    }
+
+    /**
+     * Represents the use of the `||=` operator on a call to `[]`.
+     *
+     *     foo.bar[baz] ||= value
+     *     ^^^^^^^^^^^^^^^^^^^^^^
+     */
+    public static final class IndexOrWriteNode extends Node {
+        /** optional (can be null) */
+        public final Node receiver;
+        /** optional (can be null) */
+        public final ArgumentsNode arguments;
+        /** optional (can be null) */
+        public final Node block;
+        public final short flags;
+        public final Node value;
+
+        public IndexOrWriteNode(Node receiver, ArgumentsNode arguments, Node block, short flags, Node value, int startOffset, int length) {
+            super(startOffset, length);
+            this.receiver = receiver;
+            this.arguments = arguments;
+            this.block = block;
+            this.flags = flags;
+            this.value = value;
+        }
+        
+        public boolean isSafeNavigation() {
+            return CallNodeFlags.isSafeNavigation(this.flags);
+        }
+
+        public boolean isVariableCall() {
+            return CallNodeFlags.isVariableCall(this.flags);
+        }
+        
+        public <T> void visitChildNodes(AbstractNodeVisitor<T> visitor) {
+            if (this.receiver != null) {
+                this.receiver.accept(visitor);
+            }
+            if (this.arguments != null) {
+                this.arguments.accept(visitor);
+            }
+            if (this.block != null) {
+                this.block.accept(visitor);
+            }
+            this.value.accept(visitor);
+        }
+
+        public Node[] childNodes() {
+            return new Node[] { this.receiver, this.arguments, this.block, this.value };
+        }
+
+        public <T> T accept(AbstractNodeVisitor<T> visitor) {
+            return visitor.visitIndexOrWriteNode(this);
+        }
+
+        @Override
+        protected String toString(String indent) {
+            StringBuilder builder = new StringBuilder();
+            builder.append(this.getClass().getSimpleName());
+            if (hasNewLineFlag()) {
+                builder.append("[Li]");
+            }
+            builder.append('\n');
+            String nextIndent = indent + "  ";
+            builder.append(nextIndent);
+            builder.append("receiver: ");
+            builder.append(this.receiver == null ? "null\n" : this.receiver.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("arguments: ");
+            builder.append(this.arguments == null ? "null\n" : this.arguments.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("block: ");
+            builder.append(this.block == null ? "null\n" : this.block.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("flags: ");
+            builder.append(this.flags);
+            builder.append('\n');
+            builder.append(nextIndent);
+            builder.append("value: ");
+            builder.append(this.value.toString(nextIndent));
+            return builder.toString();
+        }
+    }
+
+    /**
+     * Represents the use of the `&&=` operator for assignment to an instance variable.
+     *
+     *     @target &&= value
+     *     ^^^^^^^^^^^^^^^^^
+     */
     public static final class InstanceVariableAndWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -4037,10 +4487,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents assigning to an instance variable using an operator that isn't `=`.
-    // 
-    //     @target += value
-    //     ^^^^^^^^^^^^^^^^
+    /**
+     * Represents assigning to an instance variable using an operator that isn't `=`.
+     *
+     *     @target += value
+     *     ^^^^^^^^^^^^^^^^
+     */
     public static final class InstanceVariableOperatorWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -4089,10 +4541,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `||=` operator for assignment to an instance variable.
-    // 
-    //     @target ||= value
-    //     ^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `||=` operator for assignment to an instance variable.
+     *
+     *     @target ||= value
+     *     ^^^^^^^^^^^^^^^^^
+     */
     public static final class InstanceVariableOrWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -4135,10 +4589,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents referencing an instance variable.
-    // 
-    //     @foo
-    //     ^^^^
+    /**
+     * Represents referencing an instance variable.
+     *
+     *     @foo
+     *     ^^^^
+     */
     public static final class InstanceVariableReadNode extends Node {
         public final String name;
 
@@ -4175,10 +4631,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to an instance variable in a context that doesn't have an explicit value.
-    // 
-    //     @foo, @bar = baz
-    //     ^^^^  ^^^^
+    /**
+     * Represents writing to an instance variable in a context that doesn't have an explicit value.
+     *
+     *     @foo, @bar = baz
+     *     ^^^^  ^^^^
+     */
     public static final class InstanceVariableTargetNode extends Node {
         public final String name;
 
@@ -4215,10 +4673,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to an instance variable.
-    // 
-    //     @foo = 1
-    //     ^^^^^^^^
+    /**
+     * Represents writing to an instance variable.
+     *
+     *     @foo = 1
+     *     ^^^^^^^^
+     */
     public static final class InstanceVariableWriteNode extends Node {
         public final String name;
         public final Node value;
@@ -4261,10 +4721,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an integer number literal.
-    // 
-    //     1
-    //     ^
+    /**
+     * Represents an integer number literal.
+     *
+     *     1
+     *     ^
+     */
     public static final class IntegerNode extends Node {
         public final short flags;
 
@@ -4317,12 +4779,14 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a regular expression literal that contains interpolation that
-    // is being used in the predicate of a conditional to implicitly match
-    // against the last line read by an IO object.
-    // 
-    //     if /foo #{bar} baz/ then end
-    //        ^^^^^^^^^^^^^^^^
+    /**
+     * Represents a regular expression literal that contains interpolation that
+     * is being used in the predicate of a conditional to implicitly match
+     * against the last line read by an IO object.
+     *
+     *     if /foo #{bar} baz/ then end
+     *        ^^^^^^^^^^^^^^^^
+     */
     public static final class InterpolatedMatchLastLineNode extends Node {
         public final Node[] parts;
         public final short flags;
@@ -4411,10 +4875,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a regular expression literal that contains interpolation.
-    // 
-    //     /foo #{bar} baz/
-    //     ^^^^^^^^^^^^^^^^
+    /**
+     * Represents a regular expression literal that contains interpolation.
+     *
+     *     /foo #{bar} baz/
+     *     ^^^^^^^^^^^^^^^^
+     */
     public static final class InterpolatedRegularExpressionNode extends Node {
         public final Node[] parts;
         public final short flags;
@@ -4503,10 +4969,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a string literal that contains interpolation.
-    // 
-    //     "foo #{bar} baz"
-    //     ^^^^^^^^^^^^^^^^
+    /**
+     * Represents a string literal that contains interpolation.
+     *
+     *     "foo #{bar} baz"
+     *     ^^^^^^^^^^^^^^^^
+     */
     public static final class InterpolatedStringNode extends Node {
         public final Node[] parts;
 
@@ -4557,10 +5025,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a symbol literal that contains interpolation.
-    // 
-    //     :"foo #{bar} baz"
-    //     ^^^^^^^^^^^^^^^^^
+    /**
+     * Represents a symbol literal that contains interpolation.
+     *
+     *     :"foo #{bar} baz"
+     *     ^^^^^^^^^^^^^^^^^
+     */
     public static final class InterpolatedSymbolNode extends Node {
         public final Node[] parts;
 
@@ -4611,10 +5081,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an xstring literal that contains interpolation.
-    // 
-    //     `foo #{bar} baz`
-    //     ^^^^^^^^^^^^^^^^
+    /**
+     * Represents an xstring literal that contains interpolation.
+     *
+     *     `foo #{bar} baz`
+     *     ^^^^^^^^^^^^^^^^
+     */
     public static final class InterpolatedXStringNode extends Node {
         public final Node[] parts;
 
@@ -4665,10 +5137,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a hash literal without opening and closing braces.
-    // 
-    //     foo(a: b)
-    //         ^^^^
+    /**
+     * Represents a hash literal without opening and closing braces.
+     *
+     *     foo(a: b)
+     *         ^^^^
+     */
     public static final class KeywordHashNode extends Node {
         public final Node[] elements;
 
@@ -4711,65 +5185,13 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a keyword parameter to a method, block, or lambda definition.
-    // 
-    //     def a(b:)
-    //           ^^
-    //     end
-    // 
-    //     def a(b: 1)
-    //           ^^^^
-    //     end
-    public static final class KeywordParameterNode extends Node {
-        public final String name;
-        /** optional (can be null) */
-        public final Node value;
-
-        public KeywordParameterNode(String name, Node value, int startOffset, int length) {
-            super(startOffset, length);
-            this.name = name;
-            this.value = value;
-        }
-                
-        public <T> void visitChildNodes(AbstractNodeVisitor<T> visitor) {
-            if (this.value != null) {
-                this.value.accept(visitor);
-            }
-        }
-
-        public Node[] childNodes() {
-            return new Node[] { this.value };
-        }
-
-        public <T> T accept(AbstractNodeVisitor<T> visitor) {
-            return visitor.visitKeywordParameterNode(this);
-        }
-
-        @Override
-        protected String toString(String indent) {
-            StringBuilder builder = new StringBuilder();
-            builder.append(this.getClass().getSimpleName());
-            if (hasNewLineFlag()) {
-                builder.append("[Li]");
-            }
-            builder.append('\n');
-            String nextIndent = indent + "  ";
-            builder.append(nextIndent);
-            builder.append("name: ");
-            builder.append('"').append(this.name).append('"');
-            builder.append('\n');
-            builder.append(nextIndent);
-            builder.append("value: ");
-            builder.append(this.value == null ? "null\n" : this.value.toString(nextIndent));
-            return builder.toString();
-        }
-    }
-
-    // Represents a keyword rest parameter to a method, block, or lambda definition.
-    // 
-    //     def a(**b)
-    //           ^^^
-    //     end
+    /**
+     * Represents a keyword rest parameter to a method, block, or lambda definition.
+     *
+     *     def a(**b)
+     *           ^^^
+     *     end
+     */
     public static final class KeywordRestParameterNode extends Node {
         /** optional (can be null) */
         public final String name;
@@ -4807,10 +5229,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents using a lambda literal (not the lambda method call).
-    // 
-    //     ->(value) { value * 2 }
-    //     ^^^^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents using a lambda literal (not the lambda method call).
+     *
+     *     ->(value) { value * 2 }
+     *     ^^^^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class LambdaNode extends Node {
         public final String[] locals;
         /** optional (can be null) */
@@ -4868,10 +5292,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `&&=` operator for assignment to a local variable.
-    // 
-    //     target &&= value
-    //     ^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `&&=` operator for assignment to a local variable.
+     *
+     *     target &&= value
+     *     ^^^^^^^^^^^^^^^^
+     */
     public static final class LocalVariableAndWriteNode extends Node {
         public final Node value;
         public final String name;
@@ -4920,10 +5346,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents assigning to a local variable using an operator that isn't `=`.
-    // 
-    //     target += value
-    //     ^^^^^^^^^^^^^^^
+    /**
+     * Represents assigning to a local variable using an operator that isn't `=`.
+     *
+     *     target += value
+     *     ^^^^^^^^^^^^^^^
+     */
     public static final class LocalVariableOperatorWriteNode extends Node {
         public final Node value;
         public final String name;
@@ -4978,10 +5406,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `||=` operator for assignment to a local variable.
-    // 
-    //     target ||= value
-    //     ^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `||=` operator for assignment to a local variable.
+     *
+     *     target ||= value
+     *     ^^^^^^^^^^^^^^^^
+     */
     public static final class LocalVariableOrWriteNode extends Node {
         public final Node value;
         public final String name;
@@ -5030,12 +5460,14 @@ public abstract class Nodes {
         }
     }
 
-    // Represents reading a local variable. Note that this requires that a local
-    // variable of the same name has already been written to in the same scope,
-    // otherwise it is parsed as a method call.
-    // 
-    //     foo
-    //     ^^^
+    /**
+     * Represents reading a local variable. Note that this requires that a local
+     * variable of the same name has already been written to in the same scope,
+     * otherwise it is parsed as a method call.
+     *
+     *     foo
+     *     ^^^
+     */
     public static final class LocalVariableReadNode extends Node {
         public final String name;
         public final int depth;
@@ -5078,10 +5510,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to a local variable in a context that doesn't have an explicit value.
-    // 
-    //     foo, bar = baz
-    //     ^^^  ^^^
+    /**
+     * Represents writing to a local variable in a context that doesn't have an explicit value.
+     *
+     *     foo, bar = baz
+     *     ^^^  ^^^
+     */
     public static final class LocalVariableTargetNode extends Node {
         public final String name;
         public final int depth;
@@ -5124,10 +5558,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing to a local variable.
-    // 
-    //     foo = 1
-    //     ^^^^^^^
+    /**
+     * Represents writing to a local variable.
+     *
+     *     foo = 1
+     *     ^^^^^^^
+     */
     public static final class LocalVariableWriteNode extends Node {
         public final String name;
         public final int depth;
@@ -5176,12 +5612,14 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a regular expression literal used in the predicate of a
-    // conditional to implicitly match against the last line read by an IO
-    // object.
-    // 
-    //     if /foo/i then end
-    //        ^^^^^^
+    /**
+     * Represents a regular expression literal used in the predicate of a
+     * conditional to implicitly match against the last line read by an IO
+     * object.
+     *
+     *     if /foo/i then end
+     *        ^^^^^^
+     */
     public static final class MatchLastLineNode extends Node {
         public final byte[] unescaped;
         public final short flags;
@@ -5256,10 +5694,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the modifier `in` operator.
-    // 
-    //     foo in bar
-    //     ^^^^^^^^^^
+    /**
+     * Represents the use of the modifier `in` operator.
+     *
+     *     foo in bar
+     *     ^^^^^^^^^^
+     */
     public static final class MatchPredicateNode extends Node {
         public final Node value;
         public final Node pattern;
@@ -5302,10 +5742,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `=>` operator.
-    // 
-    //     foo => bar
-    //     ^^^^^^^^^^
+    /**
+     * Represents the use of the `=>` operator.
+     *
+     *     foo => bar
+     *     ^^^^^^^^^^
+     */
     public static final class MatchRequiredNode extends Node {
         public final Node value;
         public final Node pattern;
@@ -5348,11 +5790,13 @@ public abstract class Nodes {
         }
     }
 
-    // Represents writing local variables using a regular expression match with
-    // named capture groups.
-    // 
-    //     /(?<foo>bar)/ =~ baz
-    //     ^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents writing local variables using a regular expression match with
+     * named capture groups.
+     *
+     *     /(?<foo>bar)/ =~ baz
+     *     ^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class MatchWriteNode extends Node {
         public final CallNode call;
         public final String[] locals;
@@ -5398,8 +5842,10 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a node that is missing from the source and results in a syntax
-    // error.
+    /**
+     * Represents a node that is missing from the source and results in a syntax
+     * error.
+     */
     public static final class MissingNode extends Node {
 
         public MissingNode(int startOffset, int length) {
@@ -5430,10 +5876,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a module declaration involving the `module` keyword.
-    // 
-    //     module Foo end
-    //     ^^^^^^^^^^^^^^
+    /**
+     * Represents a module declaration involving the `module` keyword.
+     *
+     *     module Foo end
+     *     ^^^^^^^^^^^^^^
+     */
     public static final class ModuleNode extends Node {
         public final String[] locals;
         public final Node constant_path;
@@ -5494,26 +5942,43 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a multi-target expression.
-    // 
-    //     a, b, c = 1, 2, 3
-    //     ^^^^^^^
+    /**
+     * Represents a multi-target expression.
+     *
+     *     a, (b, c) = 1, 2, 3
+     *        ^^^^^^
+     */
     public static final class MultiTargetNode extends Node {
-        public final Node[] targets;
+        public final Node[] lefts;
+        /** optional (can be null) */
+        public final Node rest;
+        public final Node[] rights;
 
-        public MultiTargetNode(Node[] targets, int startOffset, int length) {
+        public MultiTargetNode(Node[] lefts, Node rest, Node[] rights, int startOffset, int length) {
             super(startOffset, length);
-            this.targets = targets;
+            this.lefts = lefts;
+            this.rest = rest;
+            this.rights = rights;
         }
                 
         public <T> void visitChildNodes(AbstractNodeVisitor<T> visitor) {
-            for (Nodes.Node child : this.targets) {
+            for (Nodes.Node child : this.lefts) {
+                child.accept(visitor);
+            }
+            if (this.rest != null) {
+                this.rest.accept(visitor);
+            }
+            for (Nodes.Node child : this.rights) {
                 child.accept(visitor);
             }
         }
 
         public Node[] childNodes() {
-            return this.targets;
+            ArrayList<Node> childNodes = new ArrayList<>();
+            childNodes.addAll(Arrays.asList(this.lefts));
+            childNodes.add(this.rest);
+            childNodes.addAll(Arrays.asList(this.rights));
+            return childNodes.toArray(EMPTY_ARRAY);
         }
 
         public <T> T accept(AbstractNodeVisitor<T> visitor) {
@@ -5531,31 +5996,53 @@ public abstract class Nodes {
             String nextIndent = indent + "  ";
             String nextNextIndent = nextIndent + "  ";
             builder.append(nextIndent);
-            builder.append("targets: ");
+            builder.append("lefts: ");
             builder.append('\n');
-            for (Node child : this.targets) {
+            for (Node child : this.lefts) {
+                builder.append(nextNextIndent).append(child.toString(nextNextIndent));
+            }
+            builder.append(nextIndent);
+            builder.append("rest: ");
+            builder.append(this.rest == null ? "null\n" : this.rest.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("rights: ");
+            builder.append('\n');
+            for (Node child : this.rights) {
                 builder.append(nextNextIndent).append(child.toString(nextNextIndent));
             }
             return builder.toString();
         }
     }
 
-    // Represents a write to a multi-target expression.
-    // 
-    //     a, b, c = 1, 2, 3
-    //     ^^^^^^^^^^^^^^^^^
+    /**
+     * Represents a write to a multi-target expression.
+     *
+     *     a, b, c = 1, 2, 3
+     *     ^^^^^^^^^^^^^^^^^
+     */
     public static final class MultiWriteNode extends Node {
-        public final Node[] targets;
+        public final Node[] lefts;
+        /** optional (can be null) */
+        public final Node rest;
+        public final Node[] rights;
         public final Node value;
 
-        public MultiWriteNode(Node[] targets, Node value, int startOffset, int length) {
+        public MultiWriteNode(Node[] lefts, Node rest, Node[] rights, Node value, int startOffset, int length) {
             super(startOffset, length);
-            this.targets = targets;
+            this.lefts = lefts;
+            this.rest = rest;
+            this.rights = rights;
             this.value = value;
         }
                 
         public <T> void visitChildNodes(AbstractNodeVisitor<T> visitor) {
-            for (Nodes.Node child : this.targets) {
+            for (Nodes.Node child : this.lefts) {
+                child.accept(visitor);
+            }
+            if (this.rest != null) {
+                this.rest.accept(visitor);
+            }
+            for (Nodes.Node child : this.rights) {
                 child.accept(visitor);
             }
             this.value.accept(visitor);
@@ -5563,7 +6050,9 @@ public abstract class Nodes {
 
         public Node[] childNodes() {
             ArrayList<Node> childNodes = new ArrayList<>();
-            childNodes.addAll(Arrays.asList(this.targets));
+            childNodes.addAll(Arrays.asList(this.lefts));
+            childNodes.add(this.rest);
+            childNodes.addAll(Arrays.asList(this.rights));
             childNodes.add(this.value);
             return childNodes.toArray(EMPTY_ARRAY);
         }
@@ -5583,9 +6072,18 @@ public abstract class Nodes {
             String nextIndent = indent + "  ";
             String nextNextIndent = nextIndent + "  ";
             builder.append(nextIndent);
-            builder.append("targets: ");
+            builder.append("lefts: ");
             builder.append('\n');
-            for (Node child : this.targets) {
+            for (Node child : this.lefts) {
+                builder.append(nextNextIndent).append(child.toString(nextNextIndent));
+            }
+            builder.append(nextIndent);
+            builder.append("rest: ");
+            builder.append(this.rest == null ? "null\n" : this.rest.toString(nextIndent));
+            builder.append(nextIndent);
+            builder.append("rights: ");
+            builder.append('\n');
+            for (Node child : this.rights) {
                 builder.append(nextNextIndent).append(child.toString(nextNextIndent));
             }
             builder.append(nextIndent);
@@ -5595,10 +6093,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `next` keyword.
-    // 
-    //     next 1
-    //     ^^^^^^
+    /**
+     * Represents the use of the `next` keyword.
+     *
+     *     next 1
+     *     ^^^^^^
+     */
     public static final class NextNode extends Node {
         /** optional (can be null) */
         public final ArgumentsNode arguments;
@@ -5638,10 +6138,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `nil` keyword.
-    // 
-    //     nil
-    //     ^^^
+    /**
+     * Represents the use of the `nil` keyword.
+     *
+     *     nil
+     *     ^^^
+     */
     public static final class NilNode extends Node {
 
         public NilNode(int startOffset, int length) {
@@ -5672,11 +6174,13 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of `**nil` inside method arguments.
-    // 
-    //     def a(**nil)
-    //           ^^^^^
-    //     end
+    /**
+     * Represents the use of `**nil` inside method arguments.
+     *
+     *     def a(**nil)
+     *           ^^^^^
+     *     end
+     */
     public static final class NoKeywordsParameterNode extends Node {
 
         public NoKeywordsParameterNode(int startOffset, int length) {
@@ -5707,10 +6211,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents reading a numbered reference to a capture in the previous match.
-    // 
-    //     $1
-    //     ^^
+    /**
+     * Represents reading a numbered reference to a capture in the previous match.
+     *
+     *     $1
+     *     ^^
+     */
     public static final class NumberedReferenceReadNode extends Node {
         public final int number;
 
@@ -5747,11 +6253,62 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an optional parameter to a method, block, or lambda definition.
-    // 
-    //     def a(b = 1)
-    //           ^^^^^
-    //     end
+    /**
+     * Represents an optional keyword parameter to a method, block, or lambda definition.
+     *
+     *     def a(b: 1)
+     *           ^^^^
+     *     end
+     */
+    public static final class OptionalKeywordParameterNode extends Node {
+        public final String name;
+        public final Node value;
+
+        public OptionalKeywordParameterNode(String name, Node value, int startOffset, int length) {
+            super(startOffset, length);
+            this.name = name;
+            this.value = value;
+        }
+                
+        public <T> void visitChildNodes(AbstractNodeVisitor<T> visitor) {
+            this.value.accept(visitor);
+        }
+
+        public Node[] childNodes() {
+            return new Node[] { this.value };
+        }
+
+        public <T> T accept(AbstractNodeVisitor<T> visitor) {
+            return visitor.visitOptionalKeywordParameterNode(this);
+        }
+
+        @Override
+        protected String toString(String indent) {
+            StringBuilder builder = new StringBuilder();
+            builder.append(this.getClass().getSimpleName());
+            if (hasNewLineFlag()) {
+                builder.append("[Li]");
+            }
+            builder.append('\n');
+            String nextIndent = indent + "  ";
+            builder.append(nextIndent);
+            builder.append("name: ");
+            builder.append('"').append(this.name).append('"');
+            builder.append('\n');
+            builder.append(nextIndent);
+            builder.append("value: ");
+            builder.append(this.value.toString(nextIndent));
+            return builder.toString();
+        }
+    }
+
+    /**
+     * Represents an optional parameter to a method, block, or lambda definition.
+     *
+     *     def a(b = 1)
+     *           ^^^^^
+     *     end
+     */
     public static final class OptionalParameterNode extends Node {
         public final String name;
         public final Node value;
@@ -5794,10 +6351,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `||` operator or the `or` keyword.
-    // 
-    //     left or right
-    //     ^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `||` operator or the `or` keyword.
+     *
+     *     left or right
+     *     ^^^^^^^^^^^^^
+     */
     public static final class OrNode extends Node {
         public final Node left;
         public final Node right;
@@ -5840,11 +6399,13 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the list of parameters on a method, block, or lambda definition.
-    // 
-    //     def a(b, c, d)
-    //           ^^^^^^^
-    //     end
+    /**
+     * Represents the list of parameters on a method, block, or lambda definition.
+     *
+     *     def a(b, c, d)
+     *           ^^^^^^^
+     *     end
+     */
     public static final class ParametersNode extends Node {
         public final Node[] requireds;
         public final Node[] optionals;
@@ -5955,10 +6516,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a parenthesized expression
-    // 
-    //     (10 + 34)
-    //     ^^^^^^^^^
+    /**
+     * Represents a parenthesized expression
+     *
+     *     (10 + 34)
+     *     ^^^^^^^^^
+     */
     public static final class ParenthesesNode extends Node {
         /** optional (can be null) */
         public final Node body;
@@ -6003,11 +6566,13 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `^` operator for pinning an expression in a
-    // pattern matching expression.
-    // 
-    //     foo in ^(bar)
-    //            ^^^^^^
+    /**
+     * Represents the use of the `^` operator for pinning an expression in a
+     * pattern matching expression.
+     *
+     *     foo in ^(bar)
+     *            ^^^^^^
+     */
     public static final class PinnedExpressionNode extends Node {
         public final Node expression;
 
@@ -6044,11 +6609,13 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `^` operator for pinning a variable in a pattern
-    // matching expression.
-    // 
-    //     foo in ^bar
-    //            ^^^^
+    /**
+     * Represents the use of the `^` operator for pinning a variable in a pattern
+     * matching expression.
+     *
+     *     foo in ^bar
+     *            ^^^^
+     */
     public static final class PinnedVariableNode extends Node {
         public final Node variable;
 
@@ -6085,10 +6652,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `END` keyword.
-    // 
-    //     END { foo }
-    //     ^^^^^^^^^^^
+    /**
+     * Represents the use of the `END` keyword.
+     *
+     *     END { foo }
+     *     ^^^^^^^^^^^
+     */
     public static final class PostExecutionNode extends Node {
         /** optional (can be null) */
         public final StatementsNode statements;
@@ -6128,10 +6697,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `BEGIN` keyword.
-    // 
-    //     BEGIN { foo }
-    //     ^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `BEGIN` keyword.
+     *
+     *     BEGIN { foo }
+     *     ^^^^^^^^^^^^^
+     */
     public static final class PreExecutionNode extends Node {
         /** optional (can be null) */
         public final StatementsNode statements;
@@ -6171,7 +6742,9 @@ public abstract class Nodes {
         }
     }
 
-    // The top level node of any parse tree.
+    /**
+     * The top level node of any parse tree.
+     */
     public static final class ProgramNode extends Node {
         public final String[] locals;
         public final StatementsNode statements;
@@ -6217,13 +6790,15 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `..` or `...` operators.
-    // 
-    //     1..2
-    //     ^^^^
-    // 
-    //     c if a =~ /left/ ... b =~ /right/
-    //          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `..` or `...` operators.
+     *
+     *     1..2
+     *     ^^^^
+     *
+     *     c if a =~ /left/ ... b =~ /right/
+     *          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class RangeNode extends Node {
         /** optional (can be null) */
         public final Node left;
@@ -6282,10 +6857,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a rational number literal.
-    // 
-    //     1.0r
-    //     ^^^^
+    /**
+     * Represents a rational number literal.
+     *
+     *     1.0r
+     *     ^^^^
+     */
     public static final class RationalNode extends Node {
         public final Node numeric;
 
@@ -6322,10 +6899,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `redo` keyword.
-    // 
-    //     redo
-    //     ^^^^
+    /**
+     * Represents the use of the `redo` keyword.
+     *
+     *     redo
+     *     ^^^^
+     */
     public static final class RedoNode extends Node {
 
         public RedoNode(int startOffset, int length) {
@@ -6356,10 +6935,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a regular expression literal with no interpolation.
-    // 
-    //     /foo/i
-    //     ^^^^^^
+    /**
+     * Represents a regular expression literal with no interpolation.
+     *
+     *     /foo/i
+     *     ^^^^^^
+     */
     public static final class RegularExpressionNode extends Node {
         public final byte[] unescaped;
         public final short flags;
@@ -6434,31 +7015,30 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a destructured required parameter node.
-    // 
-    //     def foo((bar, baz))
-    //             ^^^^^^^^^^
-    //     end
-    public static final class RequiredDestructuredParameterNode extends Node {
-        public final Node[] parameters;
+    /**
+     * Represents a required keyword parameter to a method, block, or lambda definition.
+     *
+     *     def a(b: )
+     *           ^^
+     *     end
+     */
+    public static final class RequiredKeywordParameterNode extends Node {
+        public final String name;
 
-        public RequiredDestructuredParameterNode(Node[] parameters, int startOffset, int length) {
+        public RequiredKeywordParameterNode(String name, int startOffset, int length) {
             super(startOffset, length);
-            this.parameters = parameters;
+            this.name = name;
         }
                 
         public <T> void visitChildNodes(AbstractNodeVisitor<T> visitor) {
-            for (Nodes.Node child : this.parameters) {
-                child.accept(visitor);
-            }
         }
 
         public Node[] childNodes() {
-            return this.parameters;
+            return EMPTY_ARRAY;
         }
 
         public <T> T accept(AbstractNodeVisitor<T> visitor) {
-            return visitor.visitRequiredDestructuredParameterNode(this);
+            return visitor.visitRequiredKeywordParameterNode(this);
         }
 
         @Override
@@ -6470,22 +7050,21 @@ public abstract class Nodes {
             }
             builder.append('\n');
             String nextIndent = indent + "  ";
-            String nextNextIndent = nextIndent + "  ";
             builder.append(nextIndent);
-            builder.append("parameters: ");
+            builder.append("name: ");
+            builder.append('"').append(this.name).append('"');
             builder.append('\n');
-            for (Node child : this.parameters) {
-                builder.append(nextNextIndent).append(child.toString(nextNextIndent));
-            }
             return builder.toString();
         }
     }
 
-    // Represents a required parameter to a method, block, or lambda definition.
-    // 
-    //     def a(b)
-    //           ^
-    //     end
+    /**
+     * Represents a required parameter to a method, block, or lambda definition.
+     *
+     *     def a(b)
+     *           ^
+     *     end
+     */
     public static final class RequiredParameterNode extends Node {
         public final String name;
 
@@ -6522,10 +7101,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an expression modified with a rescue.
-    // 
-    //   foo rescue nil
-    //   ^^^^^^^^^^^^^^
+    /**
+     * Represents an expression modified with a rescue.
+     *
+     *     foo rescue nil
+     *     ^^^^^^^^^^^^^^
+     */
     public static final class RescueModifierNode extends Node {
         public final Node expression;
         public final Node rescue_expression;
@@ -6573,16 +7154,18 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a rescue statement.
-    // 
-    //     begin
-    //     rescue Foo, *splat, Bar => ex
-    //     ^^^^^^
-    //       foo
-    //     end
-    // 
-    // `Foo, *splat, Bar` are in the `exceptions` field.
-    // `ex` is in the `exception` field.
+    /**
+     * Represents a rescue statement.
+     *
+     *     begin
+     *     rescue Foo, *splat, Bar => ex
+     *       foo
+     *     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     *     end
+     *
+     * `Foo, *splat, Bar` are in the `exceptions` field.
+     * `ex` is in the `exception` field.
+     */
     public static final class RescueNode extends Node {
         public final Node[] exceptions;
         /** optional (can be null) */
@@ -6657,11 +7240,13 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a rest parameter to a method, block, or lambda definition.
-    // 
-    //     def a(*b)
-    //           ^^
-    //     end
+    /**
+     * Represents a rest parameter to a method, block, or lambda definition.
+     *
+     *     def a(*b)
+     *           ^^
+     *     end
+     */
     public static final class RestParameterNode extends Node {
         /** optional (can be null) */
         public final String name;
@@ -6699,10 +7284,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `retry` keyword.
-    // 
-    //     retry
-    //     ^^^^^
+    /**
+     * Represents the use of the `retry` keyword.
+     *
+     *     retry
+     *     ^^^^^
+     */
     public static final class RetryNode extends Node {
 
         public RetryNode(int startOffset, int length) {
@@ -6733,10 +7320,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `return` keyword.
-    // 
-    //     return 1
-    //     ^^^^^^^^
+    /**
+     * Represents the use of the `return` keyword.
+     *
+     *     return 1
+     *     ^^^^^^^^
+     */
     public static final class ReturnNode extends Node {
         /** optional (can be null) */
         public final ArgumentsNode arguments;
@@ -6776,10 +7365,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the `self` keyword.
-    // 
-    //     self
-    //     ^^^^
+    /**
+     * Represents the `self` keyword.
+     *
+     *     self
+     *     ^^^^
+     */
     public static final class SelfNode extends Node {
 
         public SelfNode(int startOffset, int length) {
@@ -6810,10 +7401,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a singleton class declaration involving the `class` keyword.
-    // 
-    //     class << self end
-    //     ^^^^^^^^^^^^^^^^^
+    /**
+     * Represents a singleton class declaration involving the `class` keyword.
+     *
+     *     class << self end
+     *     ^^^^^^^^^^^^^^^^^
+     */
     public static final class SingletonClassNode extends Node {
         public final String[] locals;
         public final Node expression;
@@ -6868,10 +7461,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `__ENCODING__` keyword.
-    // 
-    //     __ENCODING__
-    //     ^^^^^^^^^^^^
+    /**
+     * Represents the use of the `__ENCODING__` keyword.
+     *
+     *     __ENCODING__
+     *     ^^^^^^^^^^^^
+     */
     public static final class SourceEncodingNode extends Node {
 
         public SourceEncodingNode(int startOffset, int length) {
@@ -6902,10 +7497,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `__FILE__` keyword.
-    // 
-    //     __FILE__
-    //     ^^^^^^^^
+    /**
+     * Represents the use of the `__FILE__` keyword.
+     *
+     *     __FILE__
+     *     ^^^^^^^^
+     */
     public static final class SourceFileNode extends Node {
         public final byte[] filepath;
 
@@ -6942,10 +7539,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `__LINE__` keyword.
-    // 
-    //     __LINE__
-    //     ^^^^^^^^
+    /**
+     * Represents the use of the `__LINE__` keyword.
+     *
+     *     __LINE__
+     *     ^^^^^^^^
+     */
     public static final class SourceLineNode extends Node {
 
         public SourceLineNode(int startOffset, int length) {
@@ -6976,10 +7575,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the splat operator.
-    // 
-    //     [*a]
-    //      ^^
+    /**
+     * Represents the use of the splat operator.
+     *
+     *     [*a]
+     *      ^^
+     */
     public static final class SplatNode extends Node {
         /** optional (can be null) */
         public final Node expression;
@@ -7019,10 +7620,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a set of statements contained within some scope.
-    // 
-    //     foo; bar; baz
-    //     ^^^^^^^^^^^^^
+    /**
+     * Represents a set of statements contained within some scope.
+     *
+     *     foo; bar; baz
+     *     ^^^^^^^^^^^^^
+     */
     public static final class StatementsNode extends Node {
         public final Node[] body;
 
@@ -7065,10 +7668,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of compile-time string concatenation.
-    // 
-    //     "foo" "bar"
-    //     ^^^^^^^^^^^
+    /**
+     * Represents the use of compile-time string concatenation.
+     *
+     *     "foo" "bar"
+     *     ^^^^^^^^^^^
+     */
     public static final class StringConcatNode extends Node {
         public final Node left;
         public final Node right;
@@ -7111,17 +7716,19 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a string literal, a string contained within a `%w` list, or
-    // plain string content within an interpolated string.
-    // 
-    //     "foo"
-    //     ^^^^^
-    // 
-    //     %w[foo]
-    //        ^^^
-    // 
-    //     "foo #{bar} baz"
-    //      ^^^^      ^^^^
+    /**
+     * Represents a string literal, a string contained within a `%w` list, or
+     * plain string content within an interpolated string.
+     *
+     *     "foo"
+     *     ^^^^^
+     *
+     *     %w[foo]
+     *        ^^^
+     *
+     *     "foo #{bar} baz"
+     *      ^^^^      ^^^^
+     */
     public static final class StringNode extends Node {
         public final short flags;
         public final byte[] unescaped;
@@ -7168,13 +7775,15 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `super` keyword with parentheses or arguments.
-    // 
-    //     super()
-    //     ^^^^^^^
-    // 
-    //     super foo, bar
-    //     ^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `super` keyword with parentheses or arguments.
+     *
+     *     super()
+     *     ^^^^^^^
+     *
+     *     super foo, bar
+     *     ^^^^^^^^^^^^^^
+     */
     public static final class SuperNode extends Node {
         /** optional (can be null) */
         public final ArgumentsNode arguments;
@@ -7223,13 +7832,15 @@ public abstract class Nodes {
         }
     }
 
-    // Represents a symbol literal or a symbol contained within a `%i` list.
-    // 
-    //     :foo
-    //     ^^^^
-    // 
-    //     %i[foo]
-    //        ^^^
+    /**
+     * Represents a symbol literal or a symbol contained within a `%i` list.
+     *
+     *     :foo
+     *     ^^^^
+     *
+     *     %i[foo]
+     *        ^^^
+     */
     public static final class SymbolNode extends Node {
         public final byte[] unescaped;
 
@@ -7266,10 +7877,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the literal `true` keyword.
-    // 
-    //     true
-    //     ^^^^
+    /**
+     * Represents the use of the literal `true` keyword.
+     *
+     *     true
+     *     ^^^^
+     */
     public static final class TrueNode extends Node {
 
         public TrueNode(int startOffset, int length) {
@@ -7300,10 +7913,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `undef` keyword.
-    // 
-    //     undef :foo, :bar, :baz
-    //     ^^^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `undef` keyword.
+     *
+     *     undef :foo, :bar, :baz
+     *     ^^^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class UndefNode extends Node {
         public final Node[] names;
 
@@ -7346,13 +7961,15 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `unless` keyword, either in the block form or the modifier form.
-    // 
-    //     bar unless foo
-    //     ^^^^^^^^^^^^^^
-    // 
-    //     unless foo then bar end
-    //     ^^^^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `unless` keyword, either in the block form or the modifier form.
+     *
+     *     bar unless foo
+     *     ^^^^^^^^^^^^^^
+     *
+     *     unless foo then bar end
+     *     ^^^^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class UnlessNode extends Node {
         public final Node predicate;
         /** optional (can be null) */
@@ -7412,13 +8029,15 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `until` keyword, either in the block form or the modifier form.
-    // 
-    //     bar until foo
-    //     ^^^^^^^^^^^^^
-    // 
-    //     until foo do bar end
-    //     ^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `until` keyword, either in the block form or the modifier form.
+     *
+     *     bar until foo
+     *     ^^^^^^^^^^^^^
+     *
+     *     until foo do bar end
+     *     ^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class UntilNode extends Node {
         public final Node predicate;
         /** optional (can be null) */
@@ -7479,12 +8098,14 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `when` keyword within a case statement.
-    // 
-    //     case true
-    //     when true
-    //     ^^^^^^^^^
-    //     end
+    /**
+     * Represents the use of the `when` keyword within a case statement.
+     *
+     *     case true
+     *     when true
+     *     ^^^^^^^^^
+     *     end
+     */
     public static final class WhenNode extends Node {
         public final Node[] conditions;
         /** optional (can be null) */
@@ -7539,13 +8160,15 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `while` keyword, either in the block form or the modifier form.
-    // 
-    //     bar while foo
-    //     ^^^^^^^^^^^^^
-    // 
-    //     while foo do bar end
-    //     ^^^^^^^^^^^^^^^^^^^^
+    /**
+     * Represents the use of the `while` keyword, either in the block form or the modifier form.
+     *
+     *     bar while foo
+     *     ^^^^^^^^^^^^^
+     *
+     *     while foo do bar end
+     *     ^^^^^^^^^^^^^^^^^^^^
+     */
     public static final class WhileNode extends Node {
         public final Node predicate;
         /** optional (can be null) */
@@ -7606,10 +8229,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents an xstring literal with no interpolation.
-    // 
-    //     `foo`
-    //     ^^^^^
+    /**
+     * Represents an xstring literal with no interpolation.
+     *
+     *     `foo`
+     *     ^^^^^
+     */
     public static final class XStringNode extends Node {
         public final byte[] unescaped;
 
@@ -7646,10 +8271,12 @@ public abstract class Nodes {
         }
     }
 
-    // Represents the use of the `yield` keyword.
-    // 
-    //     yield 1
-    //     ^^^^^^^
+    /**
+     * Represents the use of the `yield` keyword.
+     *
+     *     yield 1
+     *     ^^^^^^^
+     */
     public static final class YieldNode extends Node {
         /** optional (can be null) */
         public final ArgumentsNode arguments;
