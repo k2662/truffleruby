@@ -37,7 +37,7 @@ jobs:
           command: bin/jt build --env native
       - run:
           name: compress
-          command: cd .. && tar -cf truffleruby.tar truffleruby
+          command: tar -cf truffleruby.tar truffleruby
       - run:
           name: compress zstd
           command: zstd truffleruby.tar
