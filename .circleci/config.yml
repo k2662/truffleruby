@@ -14,6 +14,9 @@ jobs:
       - run:
           name: Turn off brew analytics
           command: echo 'export HOMEBREW_NO_ANALYTICS=1' "$BASH_ENV"
+      - run:
+          name: Turn off brew auto-update
+          command: echo 'export HOMEBREW_NO_AUTO_UPDATE=1' "$BASH_ENV"
       - run: 
           name: setup env
           command: echo 'export HOMEBREW_CASK_OPTS="/usr/local"' >> "$BASH_ENV"
