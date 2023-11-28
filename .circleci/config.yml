@@ -38,7 +38,7 @@ jobs:
           command: bin/jt build --env native
       - run:
           name: compress
-          command: gtar --zstd -cf truffleruby.tar.zst /Users/distiller/truffleruby/
+          command: gtar --zstd -cf truffleruby.tar.zst "$PWD"
       - store_artifacts:
           name: upload build artifacts
           path: truffleruby.tar.zst
